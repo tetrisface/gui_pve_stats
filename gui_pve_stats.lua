@@ -29,9 +29,10 @@ local DEFAULT_REFRESH_SECONDS = 60
 local DEFAULT_AUTO_FETCH = 1
 local DEFAULT_EVIDENCE_LOG = 1
 local DEFAULT_LUA_SOCKET_ENABLED = 1
+local DEFAULT_SHOW_SPECTATORS = 0
 local DEFAULT_VIEW_WIDTH = 1920
 local DEFAULT_VIEW_HEIGHT = 1080
-local DEFAULT_PANEL_WIDTH = 320
+local DEFAULT_PANEL_WIDTH = 344
 local DEFAULT_PANEL_TOP = 138
 local DEFAULT_PANEL_RIGHT = 18
 local HASH_MODULO = 4294967296
@@ -53,6 +54,7 @@ local state = {
 	pendingFetch = false,
 	fetchDelay = 0,
 	lastFetchTime = 0,
+	showSpectators = false,
 }
 
 local function GetConfigString(key, defaultValue)
@@ -67,6 +69,14 @@ local function GetConfigInt(key, defaultValue)
 		return Spring.GetConfigInt(key, defaultValue)
 	end
 	return defaultValue
+end
+
+local function SetConfigInt(key, value)
+	if Spring.SetConfigInt then
+		Spring.SetConfigInt(key, value)
+	elseif Spring.SetConfigString then
+		Spring.SetConfigString(key, tostring(value))
+	end
 end
 
 local function SetText(elementId, value)
@@ -114,10 +124,12 @@ local function ApplyViewModel(viewModel)
 	SetText("pve-stats-mode", state.viewModel.modeText)
 	SetText("pve-stats-difficulty", state.viewModel.difficultyText)
 	SetText("pve-stats-match", state.viewModel.matchText)
+	SetText("pve-stats-spectators-toggle", state.viewModel.spectatorText)
 	SetText("pve-stats-error", state.viewModel.errorText)
 	SetRml("pve-stats-players", state.viewModel.playersRml)
 	SetClass("pve-stats-root", "has-error", state.viewModel.hasError)
 	SetClass("pve-stats-error", "hidden", not state.viewModel.hasError)
+	SetClass("pve-stats-spectators-toggle", "active", state.viewModel.showSpectators)
 end
 
 local function StableHash(value)
@@ -149,6 +161,69 @@ local function CountValues(values)
 		count = count + 1
 	end
 	return count
+end
+
+local function SafeCall(method, ...)
+	if not method then
+		return nil
+	end
+	local ok, first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth, eleventh = pcall(method, ...)
+	if not ok then
+		return nil
+	end
+	return first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth, eleventh
+end
+
+local function ColorByte(value)
+	local number = tonumber(value) or 1
+	number = math.max(0, math.min(1, number))
+	return math.floor(number * 255 + 0.5)
+end
+
+local function HexColor(r, g, b)
+	return string.format("#%02X%02X%02X", ColorByte(r), ColorByte(g), ColorByte(b))
+end
+
+local function AccountIdFromInfo(...)
+	for index = 1, select("#", ...) do
+		local info = select(index, ...)
+		if type(info) == "table" then
+			local accountID = tonumber(info.accountid or info.accountID or info.account_id)
+			if accountID and accountID > 0 then
+				return accountID
+			end
+		end
+	end
+	return nil
+end
+
+local function BuildPlayerColorLookup()
+	local lookup = {}
+	local playerList = SafeCall(Spring.GetPlayerList) or {}
+	for _, playerID in ipairs(playerList) do
+		local name, _, spectator, teamID, _, _, _, _, _, customKeys, extraInfo = SafeCall(Spring.GetPlayerInfo, playerID, false)
+		if name and spectator == false and teamID and Spring.GetTeamColor then
+			local r, g, b = SafeCall(Spring.GetTeamColor, teamID)
+			local color = HexColor(r, g, b)
+			lookup[name] = color
+			local accountID = AccountIdFromInfo(customKeys, extraInfo)
+			if accountID then
+				lookup[accountID] = color
+				lookup[tostring(accountID)] = color
+			end
+		end
+	end
+	return lookup
+end
+
+local function BuildViewModel(response, err, request)
+	return Model.ViewModelFromResponse(response, err, request, BuildPlayerColorLookup(), {
+		showSpectators = state.showSpectators,
+	})
+end
+
+local function RefreshViewModel()
+	ApplyViewModel(BuildViewModel(state.lastResponse, state.lastError, state.lastRequest))
 end
 
 local function BuildRequestEvidence(endpoint, body, request)
@@ -432,7 +507,7 @@ local function FetchStats()
 	if not request then
 		state.lastError = err
 		LogMessage("fetch_request_failed error=" .. tostring(err))
-		ApplyViewModel(Model.ViewModelFromResponse(nil, err, nil))
+		ApplyViewModel(BuildViewModel(nil, err, nil))
 		return nil, err
 	end
 
@@ -441,7 +516,7 @@ local function FetchStats()
 		err = "encode_failed:" .. tostring(body)
 		state.lastError = err
 		LogMessage("fetch_encode_failed error=" .. tostring(err))
-		ApplyViewModel(Model.ViewModelFromResponse(nil, err, request))
+		ApplyViewModel(BuildViewModel(nil, err, request))
 		return nil, err
 	end
 
@@ -452,7 +527,7 @@ local function FetchStats()
 		state.lastError = err
 		state.lastFetchTime = os.clock()
 		LogMessage("fetch_endpoint_failed error=" .. tostring(err))
-		ApplyViewModel(Model.ViewModelFromResponse(nil, err, request))
+		ApplyViewModel(BuildViewModel(nil, err, request))
 		return nil, err
 	end
 
@@ -471,7 +546,7 @@ local function FetchStats()
 	CompleteEvidence(evidence, response, err, responseMeta)
 	LogMessage("fetch_complete status=" .. tostring(evidence.status) .. " error=" .. tostring(err or "-"))
 
-	local viewModel = Model.ViewModelFromResponse(response, err, request)
+	local viewModel = BuildViewModel(response, err, request)
 	LogMessage(table.concat({
 		"view_model status=",
 		tostring(viewModel.statusText),
@@ -510,13 +585,20 @@ local function InstallApi()
 		GetEndpoint = ResolveEndpoint,
 		IsLuaSocketEnabled = IsLuaSocketEnabled,
 		GetViewModel = function() return state.viewModel end,
+		GetShowSpectators = function() return state.showSpectators end,
+		SetShowSpectators = function(enabled)
+			state.showSpectators = enabled == true
+			SetConfigInt("PveStatsShowSpectators", state.showSpectators and 1 or 0)
+			RefreshViewModel()
+		end,
 	}
 end
 
 function widget:Initialize()
 	LogMessage("initialize_begin")
+	state.showSpectators = GetConfigInt("PveStatsShowSpectators", DEFAULT_SHOW_SPECTATORS) == 1
 	InstallApi()
-	ApplyViewModel(Model.EmptyViewModel())
+	ApplyViewModel(BuildViewModel(nil, nil, nil))
 
 	state.rmlContext = RmlUi.GetContext("shared")
 	if not state.rmlContext then
@@ -550,6 +632,8 @@ function widget:Initialize()
 		tostring(GetConfigInt("PveStatsEvidenceLog", DEFAULT_EVIDENCE_LOG)),
 		" lua_socket=",
 		tostring(GetConfigInt("LuaSocketEnabled", DEFAULT_LUA_SOCKET_ENABLED)),
+		" show_spectators=",
+		tostring(state.showSpectators and 1 or 0),
 	}))
 
 	if GetConfigInt("PveStatsAutoFetch", DEFAULT_AUTO_FETCH) == 1 then
@@ -559,6 +643,13 @@ end
 
 function widget:ViewResize()
 	PositionDocument()
+end
+
+function widget:ToggleSpectators()
+	state.showSpectators = not state.showSpectators
+	SetConfigInt("PveStatsShowSpectators", state.showSpectators and 1 or 0)
+	LogMessage("toggle_spectators enabled=" .. tostring(state.showSpectators))
+	RefreshViewModel()
 end
 
 function widget:Shutdown()

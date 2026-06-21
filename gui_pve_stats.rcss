@@ -12,7 +12,7 @@ div {
 
 .panel {
 	position: absolute;
-	width: 320dp;
+	width: 344dp;
 	min-width: 260dp;
 	min-height: 45dp;
 	background-color: #0D0D0DEB;
@@ -130,7 +130,7 @@ div {
 .pve-stats-th-stat {
 	color: #8099B3;
 	font-size: 0.75em;
-	width: 46dp;
+	width: 62dp;
 	flex-shrink: 0;
 	text-align: right;
 	padding: 0 4dp;
@@ -156,6 +156,15 @@ div {
 	background-color: #262E38E6;
 }
 
+.pve-stats-group-label {
+	color: #66CCFF;
+	font-size: 0.75em;
+	padding: 4dp 4dp 2dp 8dp;
+	background-color: #0F1419;
+	border-bottom-width: 1dp;
+	border-bottom-color: #1A2A3A;
+}
+
 .pve-stats-player-accent {
 	width: 3dp;
 	height: 100%;
@@ -175,7 +184,7 @@ div {
 .pve-stats-player-stat {
 	color: #AABBCC;
 	font-size: 0.75em;
-	width: 46dp;
+	width: 62dp;
 	flex-shrink: 0;
 	text-align: right;
 	padding: 0 4dp;

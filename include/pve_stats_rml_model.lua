@@ -58,6 +58,26 @@ local function HasAiName(value, pattern)
 	return string.find(string.lower(tostring(value or "")), pattern, 1, true) ~= nil
 end
 
+local function AccountIdFromInfo(...)
+	for index = 1, select("#", ...) do
+		local info = select(index, ...)
+		if type(info) == "table" then
+			local accountID = tonumber(info.accountid or info.accountID or info.account_id)
+			if accountID and accountID > 0 then
+				return accountID
+			end
+		end
+	end
+	return nil
+end
+
+local function AddUnique(values, seen, value)
+	if value and not seen[value] then
+		seen[value] = true
+		values[#values + 1] = value
+	end
+end
+
 function Model.DetectAiType(springApi)
 	local utilities = springApi and springApi.Utilities
 	local gametype = utilities and utilities.Gametype
@@ -98,28 +118,43 @@ end
 function Model.CollectPlayers(springApi)
 	local playerNames = {}
 	local playerIds = {}
+	local activePlayerNames = {}
+	local activePlayerIds = {}
+	local spectatorNames = {}
+	local spectatorIds = {}
 	local seenNames = {}
 	local seenIds = {}
 	local playerList = SafeCall(springApi, "GetPlayerList") or {}
 
 	for _, playerID in ipairs(playerList) do
-		local name, _, spectator, _, _, _, _, _, _, _, playerInfo = SafeCall(springApi, "GetPlayerInfo", playerID, false)
-		if name and spectator == false and not seenNames[name] then
-			seenNames[name] = true
-			playerNames[#playerNames + 1] = name
+		local name, _, spectator, _, _, _, _, _, _, customKeys, extraInfo = SafeCall(springApi, "GetPlayerInfo", playerID, false)
+		if name then
+			local groupNames = spectator and spectatorNames or activePlayerNames
+			AddUnique(playerNames, seenNames, name)
+			groupNames[#groupNames + 1] = name
 
-			local accountID = playerInfo and tonumber(playerInfo.accountid or playerInfo.accountID or playerInfo.account_id)
-			if accountID and accountID > 0 and not seenIds[accountID] then
-				seenIds[accountID] = true
-				playerIds[#playerIds + 1] = accountID
+			local accountID = AccountIdFromInfo(customKeys, extraInfo)
+			if accountID then
+				local groupIds = spectator and spectatorIds or activePlayerIds
+				AddUnique(playerIds, seenIds, accountID)
+				groupIds[#groupIds + 1] = accountID
 			end
 		end
 	end
 
 	table.sort(playerNames)
 	table.sort(playerIds)
+	table.sort(activePlayerNames)
+	table.sort(activePlayerIds)
+	table.sort(spectatorNames)
+	table.sort(spectatorIds)
 
-	return playerNames, playerIds
+	return playerNames, playerIds, {
+		active_player_names = activePlayerNames,
+		active_player_ids = activePlayerIds,
+		spectator_names = spectatorNames,
+		spectator_ids = spectatorIds,
+	}
 end
 
 function Model.RequestKey(request)
@@ -163,7 +198,7 @@ function Model.BuildRequest(springApi, gameApi)
 		return nil, "missing_map"
 	end
 
-	local playerNames, playerIds = Model.CollectPlayers(springApi)
+	local playerNames, playerIds, playerGroups = Model.CollectPlayers(springApi)
 	local request = {
 		ai_type = aiType,
 		map = mapName,
@@ -171,6 +206,10 @@ function Model.BuildRequest(springApi, gameApi)
 		player_names = playerNames,
 		player_ids = playerIds,
 		player_filter_requested = true,
+		_active_player_names = playerGroups and playerGroups.active_player_names or {},
+		_active_player_ids = playerGroups and playerGroups.active_player_ids or {},
+		_spectator_names = playerGroups and playerGroups.spectator_names or {},
+		_spectator_ids = playerGroups and playerGroups.spectator_ids or {},
 	}
 	request._request_key = Model.RequestKey(request)
 	return request
@@ -194,6 +233,73 @@ local function FormatNumber(value, decimals)
 	return string.format("%." .. tostring(decimals or 0) .. "f", number)
 end
 
+local PLAYER_COLOR_FALLBACKS = {
+	"#0066FF",
+	"#FFCC00",
+	"#FF3333",
+	"#FF00CC",
+	"#9966FF",
+	"#33FFCC",
+	"#CC6600",
+	"#FFFFFF",
+	"#00CC66",
+	"#00CCCC",
+	"#FF9966",
+	"#66FF00",
+}
+
+local function StableIndex(value, count)
+	local text = tostring(value or "")
+	local hash = 0
+	for index = 1, #text do
+		hash = (hash * 33 + string.byte(text, index)) % 2147483647
+	end
+	return (hash % count) + 1
+end
+
+local function PlayerColor(player, colorLookup)
+	local lookup = colorLookup or {}
+	local name = player and player.player_name
+	local id = player and (player.player_id or player.playerId or player.account_id or player.accountId)
+	local color = lookup[name] or lookup[tostring(name or "")] or lookup[id] or lookup[tostring(id or "")]
+	if color and string.match(tostring(color), "^#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$") then
+		return tostring(color)
+	end
+	return PLAYER_COLOR_FALLBACKS[StableIndex(name or id or "player", #PLAYER_COLOR_FALLBACKS)]
+end
+
+local function ToSet(values)
+	local set = {}
+	for _, value in ipairs(values or {}) do
+		set[value] = true
+		set[tostring(value)] = true
+	end
+	return set
+end
+
+local function PlayerId(player)
+	return player and (player.player_id or player.playerId or player.account_id or player.accountId)
+end
+
+local function SplitPlayers(players, request)
+	local activePlayers = {}
+	local spectators = {}
+	local spectatorNames = ToSet(request and request._spectator_names)
+	local spectatorIds = ToSet(request and request._spectator_ids)
+
+	for _, player in ipairs(players or {}) do
+		local name = player.player_name
+		local id = PlayerId(player)
+		if spectatorNames[name] or spectatorNames[tostring(name or "")] or spectatorIds[id] or spectatorIds[tostring(id or "")] then
+			spectators[#spectators + 1] = player
+		else
+			activePlayers[#activePlayers + 1] = player
+		end
+	end
+
+	return activePlayers, spectators
+end
+
 local function MatchLabel(response)
 	local status = response and response.match_status
 	if status == "exact" then
@@ -211,7 +317,7 @@ local function MatchLabel(response)
 	return "-"
 end
 
-function Model.PlayerRowsRml(players)
+function Model.PlayerRowsRml(players, colorLookup)
 	if not players or #players == 0 then
 		return "<div class=\"pve-stats-empty\">No player stats</div>"
 	end
@@ -219,9 +325,10 @@ function Model.PlayerRowsRml(players)
 	local rows = {}
 	for _, player in ipairs(players) do
 		local name = Model.EscapeRml(player.player_name or "Unknown")
+		local color = PlayerColor(player, colorLookup)
 		rows[#rows + 1] = table.concat({
 			"<div class=\"pve-stats-player-row\">",
-			"<div class=\"pve-stats-player-accent\"></div>",
+			"<div class=\"pve-stats-player-accent\" style=\"background-color: ", color, ";\"></div>",
 			"<span class=\"pve-stats-player-name\">", name, "</span>",
 			"<span class=\"pve-stats-player-stat\">", FormatNumber(player.exact_wins, 0), "</span>",
 			"<span class=\"pve-stats-player-stat\">", FormatNumber(player.harder_wins, 0), "</span>",
@@ -232,6 +339,25 @@ function Model.PlayerRowsRml(players)
 	return table.concat(rows, "\n")
 end
 
+local function PlayerGroupRml(label, players, colorLookup, emptyText)
+	if not players or #players == 0 then
+		return table.concat({
+			"<div class=\"pve-stats-group-label\">",
+			Model.EscapeRml(label),
+			"</div><div class=\"pve-stats-empty\">",
+			Model.EscapeRml(emptyText),
+			"</div>",
+		})
+	end
+
+	return table.concat({
+		"<div class=\"pve-stats-group-label\">",
+		Model.EscapeRml(label),
+		"</div>",
+		Model.PlayerRowsRml(players, colorLookup),
+	})
+end
+
 function Model.EmptyViewModel()
 	return {
 		statusText = "Ready",
@@ -240,13 +366,18 @@ function Model.EmptyViewModel()
 		matchText = "-",
 		errorText = "",
 		playersRml = "<div class=\"pve-stats-empty\">No player stats</div>",
+		spectatorText = "Spec",
 		hasError = false,
 		hasPlayers = false,
+		showSpectators = false,
 	}
 end
 
-function Model.ViewModelFromResponse(response, errorMessage, request)
+function Model.ViewModelFromResponse(response, errorMessage, request, colorLookup, options)
+	options = options or {}
 	local view = Model.EmptyViewModel()
+	view.showSpectators = options.showSpectators == true
+	view.spectatorText = view.showSpectators and "Spec" or "Spec"
 	if request and request.ai_type then
 		view.modeText = tostring(request.ai_type)
 	end
@@ -265,7 +396,16 @@ function Model.ViewModelFromResponse(response, errorMessage, request)
 	view.statusText = response.found and "Found" or MatchLabel(response)
 	view.matchText = MatchLabel(response)
 	view.difficultyText = FormatNumber(setting.difficulty_rating, 1)
-	view.playersRml = Model.PlayerRowsRml(response.players)
+	local activePlayers, spectators = SplitPlayers(response.players, request)
+	if view.showSpectators then
+		view.playersRml = table.concat({
+			PlayerGroupRml("Players", activePlayers, colorLookup, "No player stats"),
+			"\n",
+			PlayerGroupRml("Spectators", spectators, colorLookup, "No spectator stats"),
+		})
+	else
+		view.playersRml = Model.PlayerRowsRml(activePlayers, colorLookup)
+	end
 	view.hasPlayers = response.players and #response.players > 0 or false
 	return view
 end

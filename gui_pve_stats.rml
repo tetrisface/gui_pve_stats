@@ -12,6 +12,7 @@
                 </div>
             </handle>
             <div class="title-controls">
+                <div id="pve-stats-spectators-toggle" class="ctrl-btn" onclick="widget:ToggleSpectators(event)">Spec</div>
                 <div id="pve-stats-status" class="ctrl-btn active">Ready</div>
             </div>
         </div>
@@ -34,8 +35,8 @@
         <div class="table-area pve-stats-table">
             <div class="table-header">
                 <span class="pve-stats-th-player">Player</span>
-                <span class="pve-stats-th-stat">Exact</span>
-                <span class="pve-stats-th-stat">Harder</span>
+                <span class="pve-stats-th-stat">Exact Wins</span>
+                <span class="pve-stats-th-stat">Harder Wins</span>
                 <span class="pve-stats-th-rating">Rating</span>
             </div>
             <div id="pve-stats-players" class="pve-stats-players"></div>

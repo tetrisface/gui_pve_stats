@@ -52,8 +52,14 @@ local function testBuildRequestUsesInGameContext()
 	assertEquals(request.player_filter_requested, true)
 	assertEquals(request.player_names[1], "Alice")
 	assertEquals(request.player_names[2], "Bob")
+	assertEquals(request.player_names[3], "Spectator")
 	assertEquals(request.player_ids[1], 101)
 	assertEquals(request.player_ids[2], 202)
+	assertEquals(request.player_ids[3], 303)
+	assertEquals(request._active_player_names[1], "Alice")
+	assertEquals(request._active_player_names[2], "Bob")
+	assertEquals(request._spectator_names[1], "Spectator")
+	assertEquals(request._spectator_ids[1], 303)
 	assertTrue(request._request_key and request._request_key ~= "")
 end
 
@@ -84,6 +90,8 @@ local function testWireRequestStripsLocalFields()
 	local wire = Model.WireRequest(request)
 
 	assertEquals(wire._request_key, nil)
+	assertEquals(wire._active_player_names, nil)
+	assertEquals(wire._spectator_names, nil)
 	assertEquals(wire.ai_type, "Raptors")
 	assertEquals(wire.map, "Supreme Isthmus")
 end
@@ -117,9 +125,59 @@ local function testClosestVectorResponseViewModel()
 	assertTrue(string.find(view.playersRml, "21.2", 1, true) ~= nil)
 end
 
+local function testPlayerRowsUseColorLookup()
+	local rows = Model.PlayerRowsRml({
+		{
+			player_name = "Alice",
+			exact_wins = 1,
+			harder_wins = 2,
+			player_rating = 3.4,
+		},
+	}, {
+		Alice = "#12ABEF",
+	})
+
+	assertTrue(string.find(rows, "background-color: #12ABEF", 1, true) ~= nil)
+end
+
+local function testSpectatorsRenderAsSeparateGroupWhenEnabled()
+	local request = {
+		ai_type = "Raptors",
+		_active_player_names = {"Alice"},
+		_spectator_names = {"SpecBob"},
+	}
+	local view = Model.ViewModelFromResponse({
+		found = true,
+		match_status = "exact",
+		setting = {
+			difficulty_rating = 10,
+		},
+		players = {
+			{
+				player_name = "Alice",
+				exact_wins = 1,
+				harder_wins = 2,
+				player_rating = 3,
+			},
+			{
+				player_name = "SpecBob",
+				exact_wins = 4,
+				harder_wins = 5,
+				player_rating = 6,
+			},
+		},
+	}, nil, request, nil, {showSpectators = true})
+
+	assertTrue(string.find(view.playersRml, "Players", 1, true) ~= nil)
+	assertTrue(string.find(view.playersRml, "Spectators", 1, true) ~= nil)
+	assertTrue(string.find(view.playersRml, "SpecBob", 1, true) ~= nil)
+end
+
 testBuildRequestUsesInGameContext()
 testDetectsBarbarianFromAiInfo()
 testWireRequestStripsLocalFields()
 testClosestVectorResponseViewModel()
+testPlayerRowsUseColorLookup()
+testSpectatorsRenderAsSeparateGroupWhenEnabled()
 
 print("test_pve_stats_rml_model.lua: ok")
