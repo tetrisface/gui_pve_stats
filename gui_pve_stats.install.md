@@ -36,6 +36,23 @@ LuaUI/
          └─ pve_stats_rml_model.lua
 ```
 
+## Live Development Install
+
+For hot reload, clone this repo directly into the Windows BAR widget tree:
+
+```pwsh
+$d="$env:LOCALAPPDATA\Programs\Beyond-All-Reason\data\LuaUI\rmlwidgets\gui_pve_stats"
+git clone git@github-tetrisface:tetrisface/gui_pve_stats.git $d
+```
+
+If you keep all live widgets under `C:\Users\a\git\Widgets`, clone there and let your existing Windows symlinks point BAR at that directory. From WSL, edit the same checkout through:
+
+```text
+/mnt/c/Users/a/git/Widgets/rmlwidgets/gui_pve_stats
+```
+
+Prefer this direction over pointing BAR at files stored under `\\wsl$`.
+
 ## API Config
 
 The widget defaults to `http://127.0.0.1:8080/stats`.
