@@ -258,6 +258,14 @@ local function FormatNumber(value, decimals)
 	return string.format("%." .. tostring(decimals or 0) .. "f", number)
 end
 
+function Model.BoundedExponentialBackoffSeconds(attempt, initialSeconds, maxSeconds)
+	local safeAttempt = math.max(1, tonumber(attempt) or 1)
+	local safeInitial = math.max(0, tonumber(initialSeconds) or 0)
+	local safeMax = math.max(safeInitial, tonumber(maxSeconds) or safeInitial)
+	local delay = safeInitial * (2 ^ (safeAttempt - 1))
+	return math.min(delay, safeMax)
+end
+
 local function FirstDisplayValue(...)
 	for index = 1, select("#", ...) do
 		local value = select(index, ...)

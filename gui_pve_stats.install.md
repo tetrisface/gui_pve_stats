@@ -66,3 +66,6 @@ Useful Spring settings:
 - `PveStatsAutoFetch`
 - `PveStatsEvidenceLog`
 - `PveStatsTimeoutMs`
+- `PveStatsRetryMaxAttempts` defaults to `5`
+- `PveStatsRetryInitialSeconds` defaults to `2`
+- `PveStatsRetryMaxSeconds` defaults to `30`

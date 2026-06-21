@@ -13,6 +13,15 @@ local function assertTrue(value, message)
 	end
 end
 
+local function testBoundedExponentialBackoffSeconds()
+	assertEquals(Model.BoundedExponentialBackoffSeconds(1, 2, 30), 2)
+	assertEquals(Model.BoundedExponentialBackoffSeconds(2, 2, 30), 4)
+	assertEquals(Model.BoundedExponentialBackoffSeconds(3, 2, 30), 8)
+	assertEquals(Model.BoundedExponentialBackoffSeconds(4, 2, 30), 16)
+	assertEquals(Model.BoundedExponentialBackoffSeconds(5, 2, 30), 30)
+	assertEquals(Model.BoundedExponentialBackoffSeconds(6, 2, 30), 30)
+end
+
 local function fakeSpringWithRaptors()
 	return {
 		Utilities = {
@@ -228,6 +237,7 @@ local function testSpectatorsRenderAsSeparateGroupWhenEnabled()
 	assertTrue(string.find(view.playersRml, "SpecBob", 1, true) ~= nil)
 end
 
+testBoundedExponentialBackoffSeconds()
 testBuildRequestUsesInGameContext()
 testDetectsBarbarianFromAiInfo()
 testDetectsBarbarianFromGenericAiTeam()
