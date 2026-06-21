@@ -288,6 +288,7 @@ end
 
 local function MatchResultText(response, setting)
 	local value = FirstDisplayValue(
+		response and response.match_status,
 		response and response.match_result,
 		response and response.match,
 		response and response.result,
@@ -301,6 +302,15 @@ local function MatchResultText(response, setting)
 
 	local text = tostring(value)
 	local normalized = string.lower(text)
+	if normalized == "exact" then
+		return "Exact"
+	end
+	if normalized == "closest" then
+		return "Closest"
+	end
+	if normalized == "not_found" or normalized == "not found" then
+		return "Not found"
+	end
 	if normalized == "win" or normalized == "won" or normalized == "victory" then
 		return "Win"
 	end
