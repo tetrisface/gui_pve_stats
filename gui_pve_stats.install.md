@@ -65,3 +65,4 @@ Useful Spring settings:
 - `PveStatsPath`
 - `PveStatsAutoFetch`
 - `PveStatsEvidenceLog`
+- `PveStatsTimeoutMs`

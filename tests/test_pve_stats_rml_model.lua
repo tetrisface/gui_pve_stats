@@ -85,6 +85,54 @@ local function testDetectsBarbarianFromAiInfo()
 	assertEquals(request.player_filter_requested, true)
 end
 
+local function testDetectsBarbarianFromGenericAiTeam()
+	local spring = {
+		Utilities = {
+			Gametype = {
+				IsRaptors = function() return false end,
+				IsScavengers = function() return false end,
+			},
+		},
+		GetTeamList = function() return {7} end,
+		GetAIInfo = function()
+			return nil
+		end,
+		GetTeamInfo = function()
+			return nil, nil, nil, true
+		end,
+		GetModOptions = function() return {} end,
+		GetPlayerList = function() return {} end,
+	}
+
+	local request = assert(Model.BuildRequest(spring, {mapName = "Delta Siege"}))
+
+	assertEquals(request.ai_type, "Barbarian")
+end
+
+local function testDetectsBarbarianFromTeamLuaAi()
+	local spring = {
+		Utilities = {
+			Gametype = {
+				IsRaptors = function() return false end,
+				IsScavengers = function() return false end,
+			},
+		},
+		GetTeamList = function() return {7} end,
+		GetAIInfo = function()
+			return nil
+		end,
+		GetTeamLuaAI = function()
+			return "BARbarianAI"
+		end,
+		GetModOptions = function() return {} end,
+		GetPlayerList = function() return {} end,
+	}
+
+	local request = assert(Model.BuildRequest(spring, {mapName = "Delta Siege"}))
+
+	assertEquals(request.ai_type, "Barbarian")
+end
+
 local function testWireRequestStripsLocalFields()
 	local request = assert(Model.BuildRequest(fakeSpringWithRaptors(), {mapName = "Supreme Isthmus"}))
 	local wire = Model.WireRequest(request)
@@ -175,6 +223,8 @@ end
 
 testBuildRequestUsesInGameContext()
 testDetectsBarbarianFromAiInfo()
+testDetectsBarbarianFromGenericAiTeam()
+testDetectsBarbarianFromTeamLuaAi()
 testWireRequestStripsLocalFields()
 testClosestVectorResponseViewModel()
 testPlayerRowsUseColorLookup()

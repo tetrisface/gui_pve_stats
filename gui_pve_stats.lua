@@ -30,6 +30,8 @@ local DEFAULT_AUTO_FETCH = 1
 local DEFAULT_EVIDENCE_LOG = 1
 local DEFAULT_LUA_SOCKET_ENABLED = 1
 local DEFAULT_SHOW_SPECTATORS = 0
+local DEFAULT_DEBUG_LOG = 0
+local DEFAULT_TIMEOUT_MS = 3000
 local DEFAULT_VIEW_WIDTH = 1920
 local DEFAULT_VIEW_HEIGHT = 1080
 local DEFAULT_PANEL_WIDTH = 344
@@ -250,6 +252,12 @@ local function LogMessage(message)
 	end
 end
 
+local function DebugLog(message)
+	if GetConfigInt("PveStatsDebugLog", DEFAULT_DEBUG_LOG) == 1 then
+		LogMessage(message)
+	end
+end
+
 local function CurrentViewGeometry()
 	if Spring.GetViewGeometry then
 		local viewWidth, viewHeight = Spring.GetViewGeometry()
@@ -273,7 +281,7 @@ local function PositionDocument()
 
 	local panel = state.document:GetElementById(PANEL_ID)
 	if not panel then
-		LogMessage("position_failed reason=missing_panel id=" .. PANEL_ID)
+		DebugLog("position_failed reason=missing_panel id=" .. PANEL_ID)
 		return
 	end
 
@@ -283,7 +291,7 @@ local function PositionDocument()
 	panel.style.top = tostring(DEFAULT_PANEL_TOP) .. "px"
 	panel.style.width = tostring(DEFAULT_PANEL_WIDTH) .. "dp"
 
-	LogMessage(table.concat({
+	DebugLog(table.concat({
 		"position_panel left=",
 		tostring(left),
 		" top=",
@@ -439,7 +447,7 @@ local function PostJson(endpoint, body)
 		return nil, "missing_socket"
 	end
 
-	local timeout = GetConfigInt("PveStatsTimeoutMs", 1000) / 1000
+	local timeout = GetConfigInt("PveStatsTimeoutMs", DEFAULT_TIMEOUT_MS) / 1000
 
 	local client = socketLib.tcp()
 	client:settimeout(timeout)
@@ -500,13 +508,14 @@ local function CompleteEvidence(evidence, response, err, meta)
 end
 
 local function FetchStats()
-	LogMessage("fetch_start")
+	state.lastFetchTime = os.clock()
+	DebugLog("fetch_start")
 
 	local request, err = Model.BuildRequest(Spring, Game)
 	state.lastRequest = request
 	if not request then
 		state.lastError = err
-		LogMessage("fetch_request_failed error=" .. tostring(err))
+		DebugLog("fetch_request_failed error=" .. tostring(err))
 		ApplyViewModel(BuildViewModel(nil, err, nil))
 		return nil, err
 	end
@@ -515,7 +524,7 @@ local function FetchStats()
 	if not ok then
 		err = "encode_failed:" .. tostring(body)
 		state.lastError = err
-		LogMessage("fetch_encode_failed error=" .. tostring(err))
+		DebugLog("fetch_encode_failed error=" .. tostring(err))
 		ApplyViewModel(BuildViewModel(nil, err, request))
 		return nil, err
 	end
@@ -525,15 +534,14 @@ local function FetchStats()
 	endpoint, err = ResolveEndpoint()
 	if not endpoint then
 		state.lastError = err
-		state.lastFetchTime = os.clock()
-		LogMessage("fetch_endpoint_failed error=" .. tostring(err))
+		DebugLog("fetch_endpoint_failed error=" .. tostring(err))
 		ApplyViewModel(BuildViewModel(nil, err, request))
 		return nil, err
 	end
 
 	local evidence = BuildRequestEvidence(endpoint, body, request)
 	state.lastEvidence = evidence
-	LogMessage("fetch_post endpoint=" .. tostring(evidence.endpoint) .. " request_bytes=" .. tostring(evidence.request_bytes))
+	DebugLog("fetch_post endpoint=" .. tostring(evidence.endpoint) .. " request_bytes=" .. tostring(evidence.request_bytes))
 	local responseMeta
 	response, err, responseMeta = PostJson(endpoint, body)
 	state.lastFetchTime = os.clock()
@@ -544,10 +552,10 @@ local function FetchStats()
 		state.lastError = err
 	end
 	CompleteEvidence(evidence, response, err, responseMeta)
-	LogMessage("fetch_complete status=" .. tostring(evidence.status) .. " error=" .. tostring(err or "-"))
+	DebugLog("fetch_complete status=" .. tostring(evidence.status) .. " error=" .. tostring(err or "-"))
 
 	local viewModel = BuildViewModel(response, err, request)
-	LogMessage(table.concat({
+	DebugLog(table.concat({
 		"view_model status=",
 		tostring(viewModel.statusText),
 		" mode=",
@@ -566,7 +574,7 @@ end
 local function ScheduleFetch(delay)
 	state.pendingFetch = true
 	state.fetchDelay = delay or 0
-	LogMessage("schedule_fetch delay=" .. tostring(state.fetchDelay))
+	DebugLog("schedule_fetch delay=" .. tostring(state.fetchDelay))
 end
 
 local function InstallApi()
@@ -595,27 +603,27 @@ local function InstallApi()
 end
 
 function widget:Initialize()
-	LogMessage("initialize_begin")
+	DebugLog("initialize_begin")
 	state.showSpectators = GetConfigInt("PveStatsShowSpectators", DEFAULT_SHOW_SPECTATORS) == 1
 	InstallApi()
 	ApplyViewModel(BuildViewModel(nil, nil, nil))
 
 	state.rmlContext = RmlUi.GetContext("shared")
 	if not state.rmlContext then
-		LogMessage("initialize_failed reason=missing_rml_context")
+		DebugLog("initialize_failed reason=missing_rml_context")
 		return false
 	end
 
 	local dm = state.rmlContext:OpenDataModel(MODEL_NAME, state.viewModel, self)
 	if not dm then
-		LogMessage("initialize_failed reason=missing_data_model")
+		DebugLog("initialize_failed reason=missing_data_model")
 		return false
 	end
 	state.dmHandle = dm
 
 	local document = state.rmlContext:LoadDocument(RML_PATH, self)
 	if not document then
-		LogMessage("initialize_failed reason=missing_document path=" .. RML_PATH)
+		DebugLog("initialize_failed reason=missing_document path=" .. RML_PATH)
 		widget:Shutdown()
 		return false
 	end
@@ -625,7 +633,7 @@ function widget:Initialize()
 	document:Show()
 	ApplyViewModel(state.viewModel)
 
-	LogMessage(table.concat({
+	DebugLog(table.concat({
 		"initialize_ready auto_fetch=",
 		tostring(GetConfigInt("PveStatsAutoFetch", DEFAULT_AUTO_FETCH)),
 		" evidence_log=",
@@ -648,7 +656,7 @@ end
 function widget:ToggleSpectators()
 	state.showSpectators = not state.showSpectators
 	SetConfigInt("PveStatsShowSpectators", state.showSpectators and 1 or 0)
-	LogMessage("toggle_spectators enabled=" .. tostring(state.showSpectators))
+	DebugLog("toggle_spectators enabled=" .. tostring(state.showSpectators))
 	RefreshViewModel()
 end
 
@@ -690,10 +698,10 @@ function widget:RecvLuaMsg(message)
 		return
 	end
 	if message:sub(1, 19) == "LobbyOverlayActive0" then
-		LogMessage("visibility_show reason=lobby_overlay_inactive")
+		DebugLog("visibility_show reason=lobby_overlay_inactive")
 		state.document:Show()
 	elseif message:sub(1, 19) == "LobbyOverlayActive1" then
-		LogMessage("visibility_hide reason=lobby_overlay_active")
+		DebugLog("visibility_hide reason=lobby_overlay_active")
 		state.document:Hide()
 	end
 end

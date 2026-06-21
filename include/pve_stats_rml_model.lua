@@ -78,6 +78,19 @@ local function AddUnique(values, seen, value)
 	end
 end
 
+local function AiTypeFromText(value)
+	if HasAiName(value, "scav") then
+		return "Scavengers"
+	end
+	if HasAiName(value, "raptor") then
+		return "Raptors"
+	end
+	if HasAiName(value, "barbarian") or HasAiName(value, "barb") then
+		return "Barbarian"
+	end
+	return nil
+end
+
 function Model.DetectAiType(springApi)
 	local utilities = springApi and springApi.Utilities
 	local gametype = utilities and utilities.Gametype
@@ -91,25 +104,37 @@ function Model.DetectAiType(springApi)
 	end
 
 	local teamList = SafeCall(springApi, "GetTeamList") or {}
+	local hasGenericAiTeam = false
 	for _, teamID in ipairs(teamList) do
-		local _, _, _, name, _, options = SafeCall(springApi, "GetAIInfo", teamID)
+		local aiId, aiName, hostingPlayerID, shortName, version, options = SafeCall(springApi, "GetAIInfo", teamID)
+		local _, _, _, isAiTeam = SafeCall(springApi, "GetTeamInfo", teamID, false)
+		local teamLuaAi = SafeCall(springApi, "GetTeamLuaAI", teamID)
+		local gameRulesAiName = SafeCall(springApi, "GetGameRulesParam", "ainame_" .. tostring(teamID))
 		local haystack = table.concat({
-			tostring(name or ""),
+			tostring(aiId or ""),
+			tostring(aiName or ""),
+			tostring(hostingPlayerID or ""),
+			tostring(shortName or ""),
+			tostring(version or ""),
+			tostring(teamLuaAi or ""),
+			tostring(gameRulesAiName or ""),
 			tostring(options and options.name or ""),
 			tostring(options and options.shortName or ""),
 			tostring(options and options.version or ""),
 			tostring(options and options.profile or ""),
 		}, " ")
 
-		if HasAiName(haystack, "scav") then
-			return "Scavengers"
+		local aiType = AiTypeFromText(haystack)
+		if aiType then
+			return aiType
 		end
-		if HasAiName(haystack, "raptor") then
-			return "Raptors"
+		if aiId or aiName or shortName or teamLuaAi or isAiTeam == true then
+			hasGenericAiTeam = true
 		end
-		if HasAiName(haystack, "barbarian") or HasAiName(haystack, "barb") then
-			return "Barbarian"
-		end
+	end
+
+	if hasGenericAiTeam then
+		return "Barbarian"
 	end
 
 	return nil
