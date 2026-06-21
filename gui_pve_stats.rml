@@ -1,0 +1,35 @@
+<rml>
+<head>
+    <link type="text/rcss" href="gui_pve_stats.rcss" />
+</head>
+<body data-model="pve_stats_model">
+    <div id="pve-stats-root" class="pve-stats-root">
+        <div class="pve-stats-header">
+            <span class="pve-stats-title">PvE Stats</span>
+            <span id="pve-stats-status" class="pve-stats-status">Ready</span>
+        </div>
+        <div class="pve-stats-summary">
+            <div class="pve-stats-metric">
+                <span class="pve-stats-label">Mode</span>
+                <span id="pve-stats-mode" class="pve-stats-value">-</span>
+            </div>
+            <div class="pve-stats-metric">
+                <span class="pve-stats-label">Difficulty</span>
+                <span id="pve-stats-difficulty" class="pve-stats-value">-</span>
+            </div>
+            <div class="pve-stats-metric">
+                <span class="pve-stats-label">Match</span>
+                <span id="pve-stats-match" class="pve-stats-value">-</span>
+            </div>
+        </div>
+        <div class="pve-stats-player-header">
+            <span class="pve-stats-player-name">Player</span>
+            <span class="pve-stats-player-stat">Exact</span>
+            <span class="pve-stats-player-stat">Harder</span>
+            <span class="pve-stats-player-stat">Rating</span>
+        </div>
+        <div id="pve-stats-players" class="pve-stats-players"></div>
+        <div id="pve-stats-error" class="pve-stats-error hidden"></div>
+    </div>
+</body>
+</rml>

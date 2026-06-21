@@ -1,0 +1,111 @@
+body {
+    pointer-events: none;
+}
+
+.pve-stats-root {
+    position: fixed;
+    right: 18dp;
+    top: 138dp;
+    width: 268dp;
+    padding: 10dp;
+    background-color: rgba(15, 18, 20, 210);
+    border-width: 1dp;
+    border-color: rgba(168, 198, 184, 135);
+    border-radius: 4dp;
+    font-family: Exo 2;
+    color: #f0f4f2;
+    pointer-events: auto;
+}
+
+.pve-stats-root.has-error {
+    border-color: rgba(228, 120, 96, 180);
+}
+
+.pve-stats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8dp;
+}
+
+.pve-stats-title {
+    font-size: 16dp;
+    font-weight: 700;
+    font-effect: outline(1dp black);
+}
+
+.pve-stats-status {
+    font-size: 11dp;
+    color: #aac8b8;
+}
+
+.pve-stats-summary {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8dp;
+}
+
+.pve-stats-metric {
+    width: 31%;
+}
+
+.pve-stats-label {
+    display: block;
+    font-size: 9dp;
+    color: #9aa7a2;
+}
+
+.pve-stats-value {
+    display: block;
+    font-size: 13dp;
+    font-weight: 700;
+    color: #ffffff;
+    font-effect: outline(1dp black);
+}
+
+.pve-stats-player-header,
+.pve-stats-player-row {
+    display: flex;
+    align-items: center;
+    min-height: 18dp;
+}
+
+.pve-stats-player-header {
+    border-bottom-width: 1dp;
+    border-color: rgba(255, 255, 255, 55);
+    padding-bottom: 3dp;
+    margin-bottom: 3dp;
+    color: #9aa7a2;
+    font-size: 9dp;
+}
+
+.pve-stats-player-row {
+    font-size: 11dp;
+}
+
+.pve-stats-player-name {
+    width: 45%;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.pve-stats-player-stat {
+    width: 18%;
+    text-align: right;
+}
+
+.pve-stats-empty {
+    color: #9aa7a2;
+    font-size: 11dp;
+    padding-top: 3dp;
+}
+
+.pve-stats-error {
+    margin-top: 7dp;
+    color: #f0a38c;
+    font-size: 10dp;
+}
+
+.hidden {
+    display: none;
+}
