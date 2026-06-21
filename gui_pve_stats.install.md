@@ -1,6 +1,6 @@
 # PvE Stats RmlUi Widget
 
-Shows PvE setting difficulty, match status, wins, and ratings from a `/stats` API.
+Shows PvE setting difficulty, match result, wins, and ratings from a `/stats` API.
 
 ## Automatic Install
 

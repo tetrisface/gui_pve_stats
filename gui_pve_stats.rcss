@@ -93,7 +93,8 @@ div {
 .pve-stats-label {
 	display: block;
 	color: #8099B3CC;
-	font-size: 0.75em;
+	font-size: 0.7em;
+	overflow: hidden;
 }
 
 .pve-stats-value {

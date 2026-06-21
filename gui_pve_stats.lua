@@ -118,6 +118,9 @@ local function ApplyViewModel(viewModel)
 		dm.statusText = state.viewModel.statusText
 		dm.modeText = state.viewModel.modeText
 		dm.difficultyText = state.viewModel.difficultyText
+		dm.exactWinsText = state.viewModel.exactWinsText
+		dm.extendedWinsText = state.viewModel.extendedWinsText
+		dm.exactTotalPlayersText = state.viewModel.exactTotalPlayersText
 		dm.matchText = state.viewModel.matchText
 		dm.errorText = state.viewModel.errorText
 	end
@@ -125,6 +128,9 @@ local function ApplyViewModel(viewModel)
 	SetText("pve-stats-status", state.viewModel.statusText)
 	SetText("pve-stats-mode", state.viewModel.modeText)
 	SetText("pve-stats-difficulty", state.viewModel.difficultyText)
+	SetText("pve-stats-exact-wins", state.viewModel.exactWinsText)
+	SetText("pve-stats-extended-wins", state.viewModel.extendedWinsText)
+	SetText("pve-stats-exact-total-players", state.viewModel.exactTotalPlayersText)
 	SetText("pve-stats-match", state.viewModel.matchText)
 	SetText("pve-stats-spectators-toggle", state.viewModel.spectatorText)
 	SetText("pve-stats-error", state.viewModel.errorText)

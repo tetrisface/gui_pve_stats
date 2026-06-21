@@ -2,7 +2,7 @@
 
 In-game RmlUi widget for Beyond All Reason PvE lobby/game stats.
 
-The widget posts the current game context to a `/stats` API and shows setting difficulty, match status, player wins, and ratings. It is distributed as a standalone BAR RmlWidget so it can be installed without waiting for a full game release.
+The widget posts the current game context to a `/stats` API and shows setting difficulty, match result, player wins, and ratings. It is distributed as a standalone BAR RmlWidget so it can be installed without waiting for a full game release.
 
 ## Files
 

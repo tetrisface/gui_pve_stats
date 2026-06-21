@@ -258,6 +258,44 @@ local function FormatNumber(value, decimals)
 	return string.format("%." .. tostring(decimals or 0) .. "f", number)
 end
 
+local function FirstDisplayValue(...)
+	for index = 1, select("#", ...) do
+		local value = select(index, ...)
+		local valueType = type(value)
+		if (valueType == "string" or valueType == "number" or valueType == "boolean") and tostring(value) ~= "" then
+			return value
+		end
+	end
+	return nil
+end
+
+local function MatchResultText(response, setting)
+	local value = FirstDisplayValue(
+		response and response.match_result,
+		response and response.match,
+		response and response.result,
+		setting and setting.match_result,
+		setting and setting.match,
+		setting and setting.result
+	)
+	if value == nil then
+		return "-"
+	end
+
+	local text = tostring(value)
+	local normalized = string.lower(text)
+	if normalized == "win" or normalized == "won" or normalized == "victory" then
+		return "Win"
+	end
+	if normalized == "loss" or normalized == "lost" or normalized == "defeat" then
+		return "Loss"
+	end
+	if normalized == "draw" or normalized == "tie" then
+		return "Draw"
+	end
+	return text
+end
+
 local PLAYER_COLOR_FALLBACKS = {
 	"#0066FF",
 	"#FFCC00",
@@ -325,23 +363,6 @@ local function SplitPlayers(players, request)
 	return activePlayers, spectators
 end
 
-local function MatchLabel(response)
-	local status = response and response.match_status
-	if status == "exact" then
-		return "Exact"
-	end
-	if status == "closest" then
-		if response.closest_match_basis == "difficulty_factor_vector" then
-			return "Closest vector"
-		end
-		return "Closest"
-	end
-	if status == "not_found" then
-		return "No match"
-	end
-	return "-"
-end
-
 function Model.PlayerRowsRml(players, colorLookup)
 	if not players or #players == 0 then
 		return "<div class=\"pve-stats-empty\">No player stats</div>"
@@ -388,6 +409,9 @@ function Model.EmptyViewModel()
 		statusText = "Ready",
 		modeText = "-",
 		difficultyText = "-",
+		exactWinsText = "-",
+		extendedWinsText = "-",
+		exactTotalPlayersText = "-",
 		matchText = "-",
 		errorText = "",
 		playersRml = "<div class=\"pve-stats-empty\">No player stats</div>",
@@ -418,9 +442,12 @@ function Model.ViewModelFromResponse(response, errorMessage, request, colorLooku
 	end
 
 	local setting = response.setting or {}
-	view.statusText = response.found and "Found" or MatchLabel(response)
-	view.matchText = MatchLabel(response)
+	view.statusText = "Ready"
 	view.difficultyText = FormatNumber(setting.difficulty_rating, 1)
+	view.exactWinsText = FormatNumber(setting.exact_wins, 0)
+	view.extendedWinsText = FormatNumber(setting.extended_wins, 0)
+	view.exactTotalPlayersText = FormatNumber(setting.unique_players, 0)
+	view.matchText = MatchResultText(response, setting)
 	local activePlayers, spectators = SplitPlayers(response.players, request)
 	if view.showSpectators then
 		view.playersRml = table.concat({

@@ -144,15 +144,19 @@ local function testWireRequestStripsLocalFields()
 	assertEquals(wire.map, "Supreme Isthmus")
 end
 
-local function testClosestVectorResponseViewModel()
+local function testClosestVectorResponseUsesApiMatchResult()
 	local request = {
 		ai_type = "Raptors",
 	}
 	local view = Model.ViewModelFromResponse({
 		found = false,
 		match_status = "closest",
+		match_result = "win",
 		closest_match_basis = "difficulty_factor_vector",
 		setting = {
+			exact_wins = 80,
+			extended_wins = 100,
+			unique_players = 10,
 			difficulty_rating = 23.75,
 		},
 		players = {
@@ -166,9 +170,12 @@ local function testClosestVectorResponseViewModel()
 	}, nil, request)
 
 	assertEquals(view.modeText, "Raptors")
-	assertEquals(view.statusText, "Closest vector")
-	assertEquals(view.matchText, "Closest vector")
+	assertEquals(view.statusText, "Ready")
+	assertEquals(view.matchText, "Win")
 	assertEquals(view.difficultyText, "23.8")
+	assertEquals(view.exactWinsText, "80")
+	assertEquals(view.extendedWinsText, "100")
+	assertEquals(view.exactTotalPlayersText, "10")
 	assertTrue(string.find(view.playersRml, "&lt;Ace&gt;", 1, true) ~= nil)
 	assertTrue(string.find(view.playersRml, "21.2", 1, true) ~= nil)
 end
@@ -226,7 +233,7 @@ testDetectsBarbarianFromAiInfo()
 testDetectsBarbarianFromGenericAiTeam()
 testDetectsBarbarianFromTeamLuaAi()
 testWireRequestStripsLocalFields()
-testClosestVectorResponseViewModel()
+testClosestVectorResponseUsesApiMatchResult()
 testPlayerRowsUseColorLookup()
 testSpectatorsRenderAsSeparateGroupWhenEnabled()
 
