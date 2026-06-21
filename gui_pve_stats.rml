@@ -2,8 +2,8 @@
 <head>
     <link type="text/rcss" href="gui_pve_stats.rcss" />
 </head>
-<body data-model="pve_stats_model">
-    <div id="pve-stats-root" class="pve-stats-root">
+<body id="pve-stats-widget">
+    <div id="pve-stats-root" class="pve-stats-root" data-model="pve_stats_model">
         <div class="pve-stats-header">
             <span class="pve-stats-title">PvE Stats</span>
             <span id="pve-stats-status" class="pve-stats-status">Ready</span>

@@ -1,16 +1,22 @@
-body {
+body,
+div {
+    display: block;
+}
+
+#pve-stats-widget {
+    width: auto;
+    display: flex;
     pointer-events: none;
 }
 
 .pve-stats-root {
-    position: fixed;
-    right: 18dp;
-    top: 138dp;
+    position: absolute;
     width: 268dp;
+    min-height: 110dp;
     padding: 10dp;
-    background-color: rgba(15, 18, 20, 210);
+    background-color: #0F1214D2;
     border-width: 1dp;
-    border-color: rgba(168, 198, 184, 135);
+    border-color: #A8C6B887;
     border-radius: 4dp;
     font-family: Exo 2;
     color: #f0f4f2;
@@ -18,7 +24,7 @@ body {
 }
 
 .pve-stats-root.has-error {
-    border-color: rgba(228, 120, 96, 180);
+    border-color: #E47860B4;
 }
 
 .pve-stats-header {
@@ -72,7 +78,7 @@ body {
 
 .pve-stats-player-header {
     border-bottom-width: 1dp;
-    border-color: rgba(255, 255, 255, 55);
+    border-color: #FFFFFF37;
     padding-bottom: 3dp;
     margin-bottom: 3dp;
     color: #9aa7a2;

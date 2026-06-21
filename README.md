@@ -25,4 +25,4 @@ If another repo needs this widget as local context, bind-mount or clone the same
 
 ## Evidence
 
-For manual API checks, set `PveStatsEvidenceLog=1` or call `WG.PveStatsRml.LogLastEvidence()` after a fetch. The log line includes compact request/response hashes and match status without dumping the full payload.
+For manual API checks, leave `PveStatsEvidenceLog=1` enabled or call `WG.PveStatsRml.LogLastEvidence()` after a fetch. The `pve_stats_evidence` log line includes compact request/response hashes and match status without dumping the full payload.

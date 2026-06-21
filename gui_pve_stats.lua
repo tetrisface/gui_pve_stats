@@ -6,7 +6,7 @@ local widget = widget
 
 function widget:GetInfo()
 	return {
-		name = "PvE Stats RmlUi",
+		name = "PvE Stats",
 		desc = "Shows PvE stats from the stats API",
 		author = "tetrisface",
 		date = "2026",
@@ -16,14 +16,24 @@ function widget:GetInfo()
 	}
 end
 
-local LOG_SECTION = "PveStatsRml"
+local LOG_SECTION = "pve_stats_rml"
+local LOG_PREFIX = "pve_stats"
 local MODEL_NAME = "pve_stats_model"
 local RML_PATH = "luaui/rmlwidgets/gui_pve_stats/gui_pve_stats.rml"
+local PANEL_ID = "pve-stats-root"
 local DEFAULT_HOST = "127.0.0.1"
 local DEFAULT_PORT = 8080
 local DEFAULT_PATH = "/stats"
 local DEFAULT_URL = ""
 local DEFAULT_REFRESH_SECONDS = 60
+local DEFAULT_AUTO_FETCH = 1
+local DEFAULT_EVIDENCE_LOG = 1
+local DEFAULT_LUA_SOCKET_ENABLED = 1
+local DEFAULT_VIEW_WIDTH = 1920
+local DEFAULT_VIEW_HEIGHT = 1080
+local DEFAULT_PANEL_WIDTH = 268
+local DEFAULT_PANEL_TOP = 138
+local DEFAULT_PANEL_RIGHT = 18
 local HASH_MODULO = 4294967296
 
 local Model = VFS.Include("luaui/rmlwidgets/gui_pve_stats/include/pve_stats_rml_model.lua")
@@ -157,19 +167,67 @@ local function BuildRequestEvidence(endpoint, body, request)
 end
 
 local function LogMessage(message)
-	if Spring.Log and LOG and LOG.INFO then
-		Spring.Log(LOG_SECTION, LOG.INFO, message)
-	elseif Spring.Echo then
+	message = LOG_PREFIX .. " " .. tostring(message or "")
+	if Spring.Echo then
 		Spring.Echo("[" .. LOG_SECTION .. "] " .. message)
+	elseif Spring.Log and LOG and LOG.INFO then
+		Spring.Log(LOG_SECTION, LOG.INFO, message)
 	end
+end
+
+local function CurrentViewGeometry()
+	if Spring.GetViewGeometry then
+		local viewWidth, viewHeight = Spring.GetViewGeometry()
+		if viewWidth and viewHeight and viewWidth > 0 and viewHeight > 0 then
+			return viewWidth, viewHeight
+		end
+	end
+	if gl and gl.GetViewSizes then
+		local viewWidth, viewHeight = gl.GetViewSizes()
+		if viewWidth and viewHeight and viewWidth > 0 and viewHeight > 0 then
+			return viewWidth, viewHeight
+		end
+	end
+	return DEFAULT_VIEW_WIDTH, DEFAULT_VIEW_HEIGHT
+end
+
+local function PositionDocument()
+	if not state.document then
+		return
+	end
+
+	local panel = state.document:GetElementById(PANEL_ID)
+	if not panel then
+		LogMessage("position_failed reason=missing_panel id=" .. PANEL_ID)
+		return
+	end
+
+	local viewWidth, viewHeight = CurrentViewGeometry()
+	local left = math.max(0, viewWidth - DEFAULT_PANEL_WIDTH - DEFAULT_PANEL_RIGHT)
+	panel.style.left = tostring(left) .. "px"
+	panel.style.top = tostring(DEFAULT_PANEL_TOP) .. "px"
+	panel.style.width = tostring(DEFAULT_PANEL_WIDTH) .. "dp"
+
+	LogMessage(table.concat({
+		"position_panel left=",
+		tostring(left),
+		" top=",
+		tostring(DEFAULT_PANEL_TOP),
+		" width=",
+		tostring(DEFAULT_PANEL_WIDTH),
+		" view=",
+		tostring(viewWidth),
+		"x",
+		tostring(viewHeight),
+	}))
 end
 
 local function FormatEvidence(evidence)
 	if not evidence then
-		return "PveStatsEvidence status=missing"
+		return "pve_stats_evidence status=missing"
 	end
 	return table.concat({
-		"PveStatsEvidence version=", tostring(evidence.version or 1),
+		"pve_stats_evidence version=", tostring(evidence.version or 1),
 		" status=", tostring(evidence.status or "-"),
 		" endpoint=", tostring(evidence.endpoint or "-"),
 		" ai_type=", tostring(evidence.ai_type or "-"),
@@ -187,7 +245,7 @@ local function FormatEvidence(evidence)
 end
 
 local function MaybeLogEvidence(evidence)
-	if GetConfigInt("PveStatsEvidenceLog", 0) == 1 then
+	if GetConfigInt("PveStatsEvidenceLog", DEFAULT_EVIDENCE_LOG) == 1 then
 		LogMessage(FormatEvidence(evidence))
 	end
 end
@@ -293,7 +351,7 @@ local function ResolveEndpoint()
 end
 
 local function IsLuaSocketEnabled()
-	return GetConfigInt("LuaSocketEnabled", 1) == 1
+	return GetConfigInt("LuaSocketEnabled", DEFAULT_LUA_SOCKET_ENABLED) == 1
 end
 
 local function PostJson(endpoint, body)
@@ -367,10 +425,13 @@ local function CompleteEvidence(evidence, response, err, meta)
 end
 
 local function FetchStats()
+	LogMessage("fetch_start")
+
 	local request, err = Model.BuildRequest(Spring, Game)
 	state.lastRequest = request
 	if not request then
 		state.lastError = err
+		LogMessage("fetch_request_failed error=" .. tostring(err))
 		ApplyViewModel(Model.ViewModelFromResponse(nil, err, nil))
 		return nil, err
 	end
@@ -379,6 +440,7 @@ local function FetchStats()
 	if not ok then
 		err = "encode_failed:" .. tostring(body)
 		state.lastError = err
+		LogMessage("fetch_encode_failed error=" .. tostring(err))
 		ApplyViewModel(Model.ViewModelFromResponse(nil, err, request))
 		return nil, err
 	end
@@ -389,12 +451,14 @@ local function FetchStats()
 	if not endpoint then
 		state.lastError = err
 		state.lastFetchTime = os.clock()
+		LogMessage("fetch_endpoint_failed error=" .. tostring(err))
 		ApplyViewModel(Model.ViewModelFromResponse(nil, err, request))
 		return nil, err
 	end
 
 	local evidence = BuildRequestEvidence(endpoint, body, request)
 	state.lastEvidence = evidence
+	LogMessage("fetch_post endpoint=" .. tostring(evidence.endpoint) .. " request_bytes=" .. tostring(evidence.request_bytes))
 	local responseMeta
 	response, err, responseMeta = PostJson(endpoint, body)
 	state.lastFetchTime = os.clock()
@@ -405,14 +469,29 @@ local function FetchStats()
 		state.lastError = err
 	end
 	CompleteEvidence(evidence, response, err, responseMeta)
+	LogMessage("fetch_complete status=" .. tostring(evidence.status) .. " error=" .. tostring(err or "-"))
 
-	ApplyViewModel(Model.ViewModelFromResponse(response, err, request))
+	local viewModel = Model.ViewModelFromResponse(response, err, request)
+	LogMessage(table.concat({
+		"view_model status=",
+		tostring(viewModel.statusText),
+		" mode=",
+		tostring(viewModel.modeText),
+		" difficulty=",
+		tostring(viewModel.difficultyText),
+		" players=",
+		tostring(response and response.players and #response.players or 0),
+		" has_error=",
+		tostring(viewModel.hasError),
+	}))
+	ApplyViewModel(viewModel)
 	return response, err
 end
 
 local function ScheduleFetch(delay)
 	state.pendingFetch = true
 	state.fetchDelay = delay or 0
+	LogMessage("schedule_fetch delay=" .. tostring(state.fetchDelay))
 end
 
 local function InstallApi()
@@ -435,32 +514,51 @@ local function InstallApi()
 end
 
 function widget:Initialize()
+	LogMessage("initialize_begin")
 	InstallApi()
 	ApplyViewModel(Model.EmptyViewModel())
 
 	state.rmlContext = RmlUi.GetContext("shared")
 	if not state.rmlContext then
+		LogMessage("initialize_failed reason=missing_rml_context")
 		return false
 	end
 
 	local dm = state.rmlContext:OpenDataModel(MODEL_NAME, state.viewModel, self)
 	if not dm then
+		LogMessage("initialize_failed reason=missing_data_model")
 		return false
 	end
 	state.dmHandle = dm
 
-	local document = state.rmlContext:LoadDocument(RML_PATH)
+	local document = state.rmlContext:LoadDocument(RML_PATH, self)
 	if not document then
+		LogMessage("initialize_failed reason=missing_document path=" .. RML_PATH)
 		widget:Shutdown()
 		return false
 	end
 	state.document = document
+	document:ReloadStyleSheet()
+	PositionDocument()
 	document:Show()
 	ApplyViewModel(state.viewModel)
 
-	if GetConfigInt("PveStatsAutoFetch", 0) == 1 then
+	LogMessage(table.concat({
+		"initialize_ready auto_fetch=",
+		tostring(GetConfigInt("PveStatsAutoFetch", DEFAULT_AUTO_FETCH)),
+		" evidence_log=",
+		tostring(GetConfigInt("PveStatsEvidenceLog", DEFAULT_EVIDENCE_LOG)),
+		" lua_socket=",
+		tostring(GetConfigInt("LuaSocketEnabled", DEFAULT_LUA_SOCKET_ENABLED)),
+	}))
+
+	if GetConfigInt("PveStatsAutoFetch", DEFAULT_AUTO_FETCH) == 1 then
 		ScheduleFetch(0.5)
 	end
+end
+
+function widget:ViewResize()
+	PositionDocument()
 end
 
 function widget:Shutdown()
@@ -488,7 +586,7 @@ function widget:Update(dt)
 		return
 	end
 
-	if GetConfigInt("PveStatsAutoFetch", 0) == 1 then
+	if GetConfigInt("PveStatsAutoFetch", DEFAULT_AUTO_FETCH) == 1 then
 		local refreshSeconds = GetConfigInt("PveStatsRefreshSeconds", DEFAULT_REFRESH_SECONDS)
 		if refreshSeconds > 0 and os.clock() - state.lastFetchTime > refreshSeconds then
 			ScheduleFetch(0)
@@ -501,8 +599,10 @@ function widget:RecvLuaMsg(message)
 		return
 	end
 	if message:sub(1, 19) == "LobbyOverlayActive0" then
+		LogMessage("visibility_show reason=lobby_overlay_inactive")
 		state.document:Show()
 	elseif message:sub(1, 19) == "LobbyOverlayActive1" then
+		LogMessage("visibility_hide reason=lobby_overlay_active")
 		state.document:Hide()
 	end
 end
