@@ -16,7 +16,7 @@ function widget:GetInfo()
 	}
 end
 
-local DEV = 0
+local DEV = 1
 local LOG_SECTION = 'pve_stats_rml'
 local LOG_PREFIX = 'pve_stats'
 local MODEL_NAME = 'pve_stats_model'

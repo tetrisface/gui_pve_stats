@@ -54,6 +54,15 @@ local function SafeCall(object, methodName, ...)
 	return first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth, eleventh
 end
 
+local function CollectModOptions(springApi)
+	local modOptions = SafeCall(springApi, "GetModOptionsCopy")
+	if modOptions then
+		return CopyTable(modOptions)
+	end
+
+	return CopyTable(SafeCall(springApi, "GetModOptions") or {})
+end
+
 local function HasAiName(value, pattern)
 	return string.find(string.lower(tostring(value or "")), pattern, 1, true) ~= nil
 end
@@ -227,7 +236,7 @@ function Model.BuildRequest(springApi, gameApi)
 	local request = {
 		ai_type = aiType,
 		map = mapName,
-		game_settings = CopyTable(SafeCall(springApi, "GetModOptions") or {}),
+		game_settings = CollectModOptions(springApi),
 		player_names = playerNames,
 		player_ids = playerIds,
 		player_filter_requested = true,

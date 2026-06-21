@@ -72,6 +72,31 @@ local function testBuildRequestUsesInGameContext()
 	assertTrue(request._request_key and request._request_key ~= "")
 end
 
+local function testBuildRequestUsesIterableModOptionsCopyWhenAvailable()
+	local spring = fakeSpringWithRaptors()
+	local backingModOptions = {
+		startmetal = "3000",
+		raptor_difficulty = "hard",
+	}
+	local readOnlyProxy = {}
+	setmetatable(readOnlyProxy, {__index = backingModOptions})
+
+	spring.GetModOptions = function()
+		return readOnlyProxy
+	end
+	spring.GetModOptionsCopy = function()
+		return {
+			startmetal = backingModOptions.startmetal,
+			raptor_difficulty = backingModOptions.raptor_difficulty,
+		}
+	end
+
+	local request = assert(Model.BuildRequest(spring, {mapName = "Supreme Isthmus"}))
+
+	assertEquals(request.game_settings.startmetal, "3000")
+	assertEquals(request.game_settings.raptor_difficulty, "hard")
+end
+
 local function testDetectsBarbarianFromAiInfo()
 	local spring = {
 		Utilities = {
@@ -239,6 +264,7 @@ end
 
 testBoundedExponentialBackoffSeconds()
 testBuildRequestUsesInGameContext()
+testBuildRequestUsesIterableModOptionsCopyWhenAvailable()
 testDetectsBarbarianFromAiInfo()
 testDetectsBarbarianFromGenericAiTeam()
 testDetectsBarbarianFromTeamLuaAi()
