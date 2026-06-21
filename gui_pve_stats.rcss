@@ -105,6 +105,48 @@ div {
 	overflow: hidden;
 }
 
+.pve-stats-diffs {
+	padding: 4dp 6dp;
+	background-color: #0D0D0DEB;
+	border-top-width: 1dp;
+	border-top-color: #1A2A3A;
+	flex-shrink: 0;
+}
+
+.pve-stats-diff-title {
+	color: #8099B3;
+	font-size: 0.75em;
+	padding-bottom: 2dp;
+}
+
+.pve-stats-diff-row {
+	display: flex;
+	align-items: center;
+	min-height: 14dp;
+	padding: 1dp 0;
+}
+
+.pve-stats-diff-key {
+	color: #66CCFF;
+	font-size: 0.75em;
+	width: 118dp;
+	flex-shrink: 0;
+	overflow: hidden;
+}
+
+.pve-stats-diff-values {
+	color: #AABBCC;
+	font-size: 0.75em;
+	flex: 1;
+	overflow: hidden;
+}
+
+.pve-stats-diff-more {
+	color: #8099B3;
+	font-size: 0.75em;
+	padding-top: 1dp;
+}
+
 .table-area {
 	padding: 0 4dp 4dp 4dp;
 	flex-shrink: 0;

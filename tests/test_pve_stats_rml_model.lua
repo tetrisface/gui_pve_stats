@@ -236,6 +236,20 @@ local function testResponseUsesApiMatchStatus()
 		match_status = "closest",
 		match_result = "win",
 		closest_match_basis = "difficulty_factor_vector",
+		closest_matches = {
+			{
+				match_basis = "raw_setting_diff",
+				display_diffs = {
+					{column = "raptor_difficulty", incoming = "epic", expected = "hard"},
+				},
+				diffs = {
+					{column = "raw_only_field", incoming = "visible only without display_diffs", expected = "hidden"},
+					{column = "startmetal", incoming = "2000", expected = "2000"},
+					{column = "tweakdefs", incoming = "opaque", expected = "other"},
+					{column = "ai_type", incoming = "Raptors", expected = "Raptors"},
+				},
+			},
+		},
 		setting = {
 			exact_wins = 80,
 			extended_wins = 100,
@@ -259,6 +273,16 @@ local function testResponseUsesApiMatchStatus()
 	assertEquals(view.exactWinsText, "80")
 	assertEquals(view.extendedWinsText, "100")
 	assertEquals(view.exactTotalPlayersText, "10")
+	assertEquals(view.winsLabelText, "Closest Wins")
+	assertEquals(view.totalPlayersLabelText, "Closest Total Players")
+	assertEquals(view.playerWinsLabelText, "Closest Wins")
+	assertEquals(view.hasDiffs, true)
+	assertTrue(string.find(view.diffsRml, "raptor_difficulty", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "epic -> hard", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "raw_only_field", 1, true) == nil)
+	assertTrue(string.find(view.diffsRml, "startmetal", 1, true) == nil)
+	assertTrue(string.find(view.diffsRml, "tweakdefs", 1, true) == nil)
+	assertTrue(string.find(view.diffsRml, "ai_type", 1, true) == nil)
 	assertTrue(string.find(view.playersRml, "&lt;Ace&gt;", 1, true) ~= nil)
 	assertTrue(string.find(view.playersRml, "21.2", 1, true) ~= nil)
 
@@ -270,6 +294,8 @@ local function testResponseUsesApiMatchStatus()
 		},
 	}, nil, request)
 	assertEquals(exactView.matchText, "Exact")
+	assertEquals(exactView.winsLabelText, "Exact Wins")
+	assertEquals(exactView.hasDiffs, false)
 
 	local notFoundView = Model.ViewModelFromResponse({
 		found = false,

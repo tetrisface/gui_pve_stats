@@ -364,6 +364,94 @@ local function MatchResultText(response, setting)
 	return text
 end
 
+local function IsClosestResponse(response)
+	return string.lower(tostring(response and response.match_status or "")) == "closest"
+end
+
+local function WinsLabels(response)
+	if IsClosestResponse(response) then
+		return "Closest Wins", "Closest Total Players", "Closest Wins"
+	end
+	return "Exact Wins", "Exact Total Players", "Exact Wins"
+end
+
+local function StartsWith(value, prefix)
+	return string.sub(value, 1, #prefix) == prefix
+end
+
+local function HiddenDiffColumn(column)
+	local lower = string.lower(tostring(column or ""))
+	return lower == "" or lower == "ai_type" or StartsWith(lower, "tweakdefs") or StartsWith(lower, "tweakunits")
+end
+
+local function DiffValueText(value)
+	local valueType = type(value)
+	if value == nil then
+		return "-"
+	end
+	if valueType == "boolean" then
+		return value and "true" or "false"
+	end
+	if valueType == "number" or valueType == "string" then
+		local text = tostring(value)
+		if text == "" then
+			return "-"
+		end
+		return text
+	end
+	return "<complex>"
+end
+
+local function SameDiffValue(left, right)
+	return DiffValueText(left) == DiffValueText(right)
+end
+
+local function ClosestDiffsRml(response)
+	local matches = response and response.closest_matches
+	local topMatch = matches and matches[1]
+	local diffs = topMatch and (topMatch.display_diffs or topMatch.diffs) or {}
+	local rows = {}
+	local visibleCount = 0
+
+	for _, diff in ipairs(diffs) do
+		local column = diff and diff.column
+		if not HiddenDiffColumn(column) and not SameDiffValue(diff.incoming, diff.expected) then
+			visibleCount = visibleCount + 1
+			if visibleCount <= 6 then
+				rows[#rows + 1] = table.concat({
+					"<div class=\"pve-stats-diff-row\">",
+					"<span class=\"pve-stats-diff-key\">", Model.EscapeRml(column), "</span>",
+					"<span class=\"pve-stats-diff-values\">",
+					Model.EscapeRml(DiffValueText(diff.incoming)),
+					" -> ",
+					Model.EscapeRml(DiffValueText(diff.expected)),
+					"</span>",
+					"</div>",
+				})
+			end
+		end
+	end
+
+	if visibleCount == 0 then
+		return "", false
+	end
+	if visibleCount > 6 then
+		rows[#rows + 1] = table.concat({
+			"<div class=\"pve-stats-diff-more\">+",
+			tostring(visibleCount - 6),
+			" more</div>",
+		})
+	end
+	return table.concat({
+		"<div class=\"pve-stats-diff-title\">Closest differs by ",
+		tostring(visibleCount),
+		" shown field",
+		visibleCount == 1 and "" or "s",
+		"</div>",
+		table.concat(rows, "\n"),
+	}), true
+end
+
 local PLAYER_COLOR_FALLBACKS = {
 	"#0066FF",
 	"#FFCC00",
@@ -480,12 +568,17 @@ function Model.EmptyViewModel()
 		exactWinsText = "-",
 		extendedWinsText = "-",
 		exactTotalPlayersText = "-",
+		winsLabelText = "Exact Wins",
+		totalPlayersLabelText = "Exact Total Players",
+		playerWinsLabelText = "Exact Wins",
 		matchText = "-",
 		errorText = "",
 		playersRml = "<div class=\"pve-stats-empty\">No player stats</div>",
+		diffsRml = "",
 		spectatorText = "Spec",
 		hasError = false,
 		hasPlayers = false,
+		hasDiffs = false,
 		showSpectators = false,
 	}
 end
@@ -515,7 +608,9 @@ function Model.ViewModelFromResponse(response, errorMessage, request, colorLooku
 	view.exactWinsText = FormatNumber(setting.exact_wins, 0)
 	view.extendedWinsText = FormatNumber(setting.extended_wins, 0)
 	view.exactTotalPlayersText = FormatNumber(setting.unique_players, 0)
+	view.winsLabelText, view.totalPlayersLabelText, view.playerWinsLabelText = WinsLabels(response)
 	view.matchText = MatchResultText(response, setting)
+	view.diffsRml, view.hasDiffs = ClosestDiffsRml(response)
 	local activePlayers, spectators = SplitPlayers(response.players, request)
 	if view.showSpectators then
 		view.playersRml = table.concat({

@@ -125,6 +125,9 @@ local function ApplyViewModel(viewModel)
 		dm.exactWinsText = state.viewModel.exactWinsText
 		dm.extendedWinsText = state.viewModel.extendedWinsText
 		dm.exactTotalPlayersText = state.viewModel.exactTotalPlayersText
+		dm.winsLabelText = state.viewModel.winsLabelText
+		dm.totalPlayersLabelText = state.viewModel.totalPlayersLabelText
+		dm.playerWinsLabelText = state.viewModel.playerWinsLabelText
 		dm.matchText = state.viewModel.matchText
 		dm.errorText = state.viewModel.errorText
 	end
@@ -135,12 +138,17 @@ local function ApplyViewModel(viewModel)
 	SetText('pve-stats-exact-wins', state.viewModel.exactWinsText)
 	SetText('pve-stats-extended-wins', state.viewModel.extendedWinsText)
 	SetText('pve-stats-exact-total-players', state.viewModel.exactTotalPlayersText)
+	SetText('pve-stats-exact-wins-label', state.viewModel.winsLabelText)
+	SetText('pve-stats-exact-total-players-label', state.viewModel.totalPlayersLabelText)
+	SetText('pve-stats-player-exact-wins-label', state.viewModel.playerWinsLabelText)
 	SetText('pve-stats-match', state.viewModel.matchText)
 	SetText('pve-stats-spectators-toggle', state.viewModel.spectatorText)
 	SetText('pve-stats-error', state.viewModel.errorText)
 	SetRml('pve-stats-players', state.viewModel.playersRml)
+	SetRml('pve-stats-diffs', state.viewModel.diffsRml)
 	SetClass('pve-stats-root', 'has-error', state.viewModel.hasError)
 	SetClass('pve-stats-error', 'hidden', not state.viewModel.hasError)
+	SetClass('pve-stats-diffs', 'hidden', not state.viewModel.hasDiffs)
 	SetClass('pve-stats-spectators-toggle', 'active', state.viewModel.showSpectators)
 end
 

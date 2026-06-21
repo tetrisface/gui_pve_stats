@@ -34,7 +34,7 @@
 
         <div class="pve-stats-summary">
             <div class="pve-stats-metric">
-                <span class="pve-stats-label">Exact Wins</span>
+                <span id="pve-stats-exact-wins-label" class="pve-stats-label">Exact Wins</span>
                 <span id="pve-stats-exact-wins" class="pve-stats-value">-</span>
             </div>
             <div class="pve-stats-metric">
@@ -42,15 +42,17 @@
                 <span id="pve-stats-extended-wins" class="pve-stats-value">-</span>
             </div>
             <div class="pve-stats-metric">
-                <span class="pve-stats-label">Exact Total Players</span>
+                <span id="pve-stats-exact-total-players-label" class="pve-stats-label">Exact Total Players</span>
                 <span id="pve-stats-exact-total-players" class="pve-stats-value">-</span>
             </div>
         </div>
 
+        <div id="pve-stats-diffs" class="pve-stats-diffs hidden"></div>
+
         <div class="table-area pve-stats-table">
             <div class="table-header">
                 <span class="pve-stats-th-player">Player</span>
-                <span class="pve-stats-th-stat">Exact Wins</span>
+                <span id="pve-stats-player-exact-wins-label" class="pve-stats-th-stat">Exact Wins</span>
                 <span class="pve-stats-th-stat">Harder Wins</span>
                 <span class="pve-stats-th-rating">Rating</span>
             </div>
