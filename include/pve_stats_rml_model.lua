@@ -67,6 +67,16 @@ local function HasAiName(value, pattern)
 	return string.find(string.lower(tostring(value or "")), pattern, 1, true) ~= nil
 end
 
+local function AiTypeFromFlags(isRaptors, isScavengers)
+	if isRaptors == true and isScavengers ~= true then
+		return "Raptors"
+	end
+	if isScavengers == true and isRaptors ~= true then
+		return "Scavengers"
+	end
+	return nil
+end
+
 local function AccountIdFromInfo(...)
 	for index = 1, select("#", ...) do
 		local info = select(index, ...)
@@ -88,11 +98,16 @@ local function AddUnique(values, seen, value)
 end
 
 local function AiTypeFromText(value)
-	if HasAiName(value, "scav") then
+	local hasRaptors = HasAiName(value, "raptors") or HasAiName(value, "raptor")
+	local hasScavengers = HasAiName(value, "scavengers") or HasAiName(value, "scavenger")
+	if hasRaptors and not hasScavengers then
+		return "Raptors"
+	end
+	if hasScavengers and not hasRaptors then
 		return "Scavengers"
 	end
-	if HasAiName(value, "raptor") then
-		return "Raptors"
+	if hasRaptors and hasScavengers then
+		return nil
 	end
 	if HasAiName(value, "barbarian") or HasAiName(value, "barb") then
 		return "Barbarian"
@@ -100,53 +115,78 @@ local function AiTypeFromText(value)
 	return nil
 end
 
-function Model.DetectAiType(springApi)
+local function AiTypeFromSeenTeams(seen)
+	local hasRaptors = seen.Raptors == true
+	local hasScavengers = seen.Scavengers == true
+	if hasRaptors and not hasScavengers then
+		return "Raptors", "team_ai_identity"
+	end
+	if hasScavengers and not hasRaptors then
+		return "Scavengers", "team_ai_identity"
+	end
+	if hasRaptors or hasScavengers then
+		return nil, "ambiguous_team_ai_identity"
+	end
+	if seen.Barbarian then
+		return "Barbarian", "team_ai_identity"
+	end
+	return nil, nil
+end
+
+local function DetectAiTypeWithSource(springApi)
 	local utilities = springApi and springApi.Utilities
 	local gametype = utilities and utilities.Gametype
 	if gametype then
-		if SafeCall(gametype, "IsRaptors") then
-			return "Raptors"
-		end
-		if SafeCall(gametype, "IsScavengers") then
-			return "Scavengers"
+		local aiType = AiTypeFromFlags(SafeCall(gametype, "IsRaptors"), SafeCall(gametype, "IsScavengers"))
+		if aiType then
+			return aiType, "spring_utilities_gametype"
 		end
 	end
 
 	local teamList = SafeCall(springApi, "GetTeamList") or {}
 	local hasGenericAiTeam = false
+	local seen = {}
 	for _, teamID in ipairs(teamList) do
-		local aiId, aiName, hostingPlayerID, shortName, version, options = SafeCall(springApi, "GetAIInfo", teamID)
+		local aiId, possibleAiName, _hostingPlayerID, aiName, version = SafeCall(springApi, "GetAIInfo", teamID)
 		local _, _, _, isAiTeam = SafeCall(springApi, "GetTeamInfo", teamID, false)
 		local teamLuaAi = SafeCall(springApi, "GetTeamLuaAI", teamID)
 		local gameRulesAiName = SafeCall(springApi, "GetGameRulesParam", "ainame_" .. tostring(teamID))
 		local haystack = table.concat({
 			tostring(aiId or ""),
+			tostring(possibleAiName or ""),
 			tostring(aiName or ""),
-			tostring(hostingPlayerID or ""),
-			tostring(shortName or ""),
 			tostring(version or ""),
 			tostring(teamLuaAi or ""),
 			tostring(gameRulesAiName or ""),
-			tostring(options and options.name or ""),
-			tostring(options and options.shortName or ""),
-			tostring(options and options.version or ""),
-			tostring(options and options.profile or ""),
 		}, " ")
 
 		local aiType = AiTypeFromText(haystack)
 		if aiType then
-			return aiType
+			seen[aiType] = true
 		end
-		if aiId or aiName or shortName or teamLuaAi or isAiTeam == true then
+		if aiId or possibleAiName or aiName or teamLuaAi or isAiTeam == true then
 			hasGenericAiTeam = true
 		end
 	end
 
-	if hasGenericAiTeam then
-		return "Barbarian"
+	local aiType, aiTypeSource = AiTypeFromSeenTeams(seen)
+	if aiType then
+		return aiType, aiTypeSource
+	end
+	if aiTypeSource then
+		return nil, aiTypeSource
 	end
 
-	return nil
+	if hasGenericAiTeam then
+		return "Barbarian", "generic_ai_team"
+	end
+
+	return nil, "missing_ai_type"
+end
+
+function Model.DetectAiType(springApi)
+	local aiType = DetectAiTypeWithSource(springApi)
+	return aiType
 end
 
 function Model.CollectPlayers(springApi)
@@ -222,9 +262,9 @@ function Model.WireRequest(request)
 end
 
 function Model.BuildRequest(springApi, gameApi)
-	local aiType = Model.DetectAiType(springApi)
+	local aiType, aiTypeSource = DetectAiTypeWithSource(springApi)
 	if not aiType then
-		return nil, "missing_ai_type"
+		return nil, aiTypeSource or "missing_ai_type"
 	end
 
 	local mapName = gameApi and (gameApi.mapName or gameApi.map_name)
@@ -240,6 +280,7 @@ function Model.BuildRequest(springApi, gameApi)
 		player_names = playerNames,
 		player_ids = playerIds,
 		player_filter_requested = true,
+		_ai_type_source = aiTypeSource,
 		_active_player_names = playerGroups and playerGroups.active_player_names or {},
 		_active_player_ids = playerGroups and playerGroups.active_player_ids or {},
 		_spectator_names = playerGroups and playerGroups.spectator_names or {},

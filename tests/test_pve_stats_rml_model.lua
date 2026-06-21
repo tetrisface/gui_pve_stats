@@ -69,6 +69,7 @@ local function testBuildRequestUsesInGameContext()
 	assertEquals(request._active_player_names[2], "Bob")
 	assertEquals(request._spectator_names[1], "Spectator")
 	assertEquals(request._spectator_ids[1], 303)
+	assertEquals(request._ai_type_source, "spring_utilities_gametype")
 	assertTrue(request._request_key and request._request_key ~= "")
 end
 
@@ -95,6 +96,53 @@ local function testBuildRequestUsesIterableModOptionsCopyWhenAvailable()
 
 	assertEquals(request.game_settings.startmetal, "3000")
 	assertEquals(request.game_settings.raptor_difficulty, "hard")
+end
+
+local function testDetectsRaptorsFromTeamLuaAiWithoutIncidentalScavengerText()
+	local spring = {
+		GetTeamList = function() return {7} end,
+		GetAIInfo = function()
+			return nil, nil, nil, nil, nil, {
+				name = "scavengers should not be considered ai identity",
+			}
+		end,
+		GetTeamLuaAI = function()
+			return "RaptorsDefense AI"
+		end,
+		GetGameRulesParam = function()
+			return nil
+		end,
+		GetModOptions = function()
+			return {
+				lootboxes = "scav_only",
+				scav_difficulty = "epic",
+				raptor_difficulty = "normal",
+			}
+		end,
+		GetPlayerList = function() return {} end,
+	}
+
+	local request = assert(Model.BuildRequest(spring, {mapName = "Supreme Isthmus"}))
+
+	assertEquals(request.ai_type, "Raptors")
+	assertEquals(request._ai_type_source, "team_ai_identity")
+end
+
+local function testAmbiguousPveAiIdentityFailsClosed()
+	local spring = {
+		GetTeamList = function() return {7, 8} end,
+		GetAIInfo = function() return nil end,
+		GetTeamLuaAI = function(teamID)
+			return teamID == 7 and "RaptorsDefense AI" or "ScavengersDefense AI"
+		end,
+		GetModOptions = function() return {} end,
+		GetPlayerList = function() return {} end,
+	}
+
+	local request, err = Model.BuildRequest(spring, {mapName = "Supreme Isthmus"})
+
+	assertEquals(request, nil)
+	assertEquals(err, "ambiguous_team_ai_identity")
 end
 
 local function testDetectsBarbarianFromAiInfo()
@@ -174,6 +222,7 @@ local function testWireRequestStripsLocalFields()
 	assertEquals(wire._request_key, nil)
 	assertEquals(wire._active_player_names, nil)
 	assertEquals(wire._spectator_names, nil)
+	assertEquals(wire._ai_type_source, nil)
 	assertEquals(wire.ai_type, "Raptors")
 	assertEquals(wire.map, "Supreme Isthmus")
 end
@@ -280,6 +329,8 @@ end
 testBoundedExponentialBackoffSeconds()
 testBuildRequestUsesInGameContext()
 testBuildRequestUsesIterableModOptionsCopyWhenAvailable()
+testDetectsRaptorsFromTeamLuaAiWithoutIncidentalScavengerText()
+testAmbiguousPveAiIdentityFailsClosed()
 testDetectsBarbarianFromAiInfo()
 testDetectsBarbarianFromGenericAiTeam()
 testDetectsBarbarianFromTeamLuaAi()
