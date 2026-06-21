@@ -221,10 +221,11 @@ function Model.PlayerRowsRml(players)
 		local name = Model.EscapeRml(player.player_name or "Unknown")
 		rows[#rows + 1] = table.concat({
 			"<div class=\"pve-stats-player-row\">",
+			"<div class=\"pve-stats-player-accent\"></div>",
 			"<span class=\"pve-stats-player-name\">", name, "</span>",
 			"<span class=\"pve-stats-player-stat\">", FormatNumber(player.exact_wins, 0), "</span>",
 			"<span class=\"pve-stats-player-stat\">", FormatNumber(player.harder_wins, 0), "</span>",
-			"<span class=\"pve-stats-player-stat\">", FormatNumber(player.player_rating, 1), "</span>",
+			"<span class=\"pve-stats-player-rating\">", FormatNumber(player.player_rating, 1), "</span>",
 			"</div>",
 		})
 	end

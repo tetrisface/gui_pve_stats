@@ -1,117 +1,209 @@
 body,
 div {
-    display: block;
+	display: block;
 }
 
 #pve-stats-widget {
-    width: auto;
-    display: flex;
-    pointer-events: none;
+	width: auto;
+	min-height: 45dp;
+	display: flex;
+	pointer-events: none;
 }
 
-.pve-stats-root {
-    position: absolute;
-    width: 268dp;
-    min-height: 110dp;
-    padding: 10dp;
-    background-color: #0F1214D2;
-    border-width: 1dp;
-    border-color: #A8C6B887;
-    border-radius: 4dp;
-    font-family: Exo 2;
-    color: #f0f4f2;
-    pointer-events: auto;
+.panel {
+	position: absolute;
+	width: 320dp;
+	min-width: 260dp;
+	min-height: 45dp;
+	background-color: #0D0D0DEB;
+	font-family: Exo 2;
+	font-size: 12dp;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	color: #CCCCCC;
+	pointer-events: auto;
 }
 
 .pve-stats-root.has-error {
-    border-color: #E47860B4;
+	border-width: 1dp;
+	border-color: #994A3A;
 }
 
-.pve-stats-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8dp;
+.title-bar {
+	height: 25dp;
+	background-color: #1A1F26CC;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0 8dp;
+	flex-shrink: 0;
 }
 
-.pve-stats-title {
-    font-size: 16dp;
-    font-weight: 700;
-    font-effect: outline(1dp black);
+.title-bar handle {
+	display: flex;
+	align-items: center;
+	cursor: move;
 }
 
-.pve-stats-status {
-    font-size: 11dp;
-    color: #aac8b8;
+.title-content {
+	display: flex;
+	align-items: center;
+}
+
+.title-text {
+	color: #CCE6FF;
+	font-size: 1em;
+	font-weight: bold;
+}
+
+.title-controls {
+	display: flex;
+	gap: 4dp;
+	align-items: center;
+}
+
+.ctrl-btn {
+	color: #8099B3CC;
+	font-size: 0.75em;
+	padding: 2dp 4dp;
+	background-color: #0F1419;
+}
+
+.ctrl-btn.active {
+	color: #66CCFF;
+	background-color: #1A2A3A;
+	font-weight: bold;
 }
 
 .pve-stats-summary {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 8dp;
+	display: flex;
+	gap: 1dp;
+	padding: 3dp 2dp;
+	background-color: #0F1419;
+	flex-shrink: 0;
 }
 
 .pve-stats-metric {
-    width: 31%;
+	flex: 1;
+	padding: 2dp 4dp;
+	background-color: #101820;
 }
 
 .pve-stats-label {
-    display: block;
-    font-size: 9dp;
-    color: #9aa7a2;
+	display: block;
+	color: #8099B3CC;
+	font-size: 0.75em;
 }
 
 .pve-stats-value {
-    display: block;
-    font-size: 13dp;
-    font-weight: 700;
-    color: #ffffff;
-    font-effect: outline(1dp black);
+	display: block;
+	color: #CCE6FF;
+	font-size: 0.917em;
+	font-weight: bold;
+	overflow: hidden;
 }
 
-.pve-stats-player-header,
+.table-area {
+	padding: 0 4dp 4dp 4dp;
+	flex-shrink: 0;
+	background-color: #0D0D0DEB;
+}
+
+.table-header {
+	display: flex;
+	align-items: center;
+	height: 14dp;
+	padding: 1dp 0;
+	border-bottom-width: 1dp;
+	border-bottom-color: #262E38;
+}
+
+.pve-stats-th-player {
+	color: #8099B3;
+	font-size: 0.75em;
+	min-width: 66dp;
+	flex: 1;
+	padding-left: 8dp;
+}
+
+.pve-stats-th-stat {
+	color: #8099B3;
+	font-size: 0.75em;
+	width: 46dp;
+	flex-shrink: 0;
+	text-align: right;
+	padding: 0 4dp;
+}
+
+.pve-stats-th-rating {
+	color: #8099B3;
+	font-size: 0.75em;
+	width: 50dp;
+	flex-shrink: 0;
+	text-align: right;
+	padding: 0 6dp 0 4dp;
+}
+
 .pve-stats-player-row {
-    display: flex;
-    align-items: center;
-    min-height: 18dp;
+	display: flex;
+	align-items: center;
+	height: 16dp;
+	padding: 1dp 0;
 }
 
-.pve-stats-player-header {
-    border-bottom-width: 1dp;
-    border-color: #FFFFFF37;
-    padding-bottom: 3dp;
-    margin-bottom: 3dp;
-    color: #9aa7a2;
-    font-size: 9dp;
+.pve-stats-player-row:hover {
+	background-color: #262E38E6;
 }
 
-.pve-stats-player-row {
-    font-size: 11dp;
+.pve-stats-player-accent {
+	width: 3dp;
+	height: 100%;
+	margin-right: 5dp;
+	flex-shrink: 0;
+	background-color: #0066FF;
 }
 
 .pve-stats-player-name {
-    width: 45%;
-    overflow: hidden;
-    white-space: nowrap;
+	color: #CCCCCC;
+	font-size: 0.833em;
+	min-width: 66dp;
+	flex: 1;
+	overflow: hidden;
 }
 
 .pve-stats-player-stat {
-    width: 18%;
-    text-align: right;
+	color: #AABBCC;
+	font-size: 0.75em;
+	width: 46dp;
+	flex-shrink: 0;
+	text-align: right;
+	padding: 0 4dp;
+}
+
+.pve-stats-player-rating {
+	color: #99AABB;
+	font-size: 0.75em;
+	width: 50dp;
+	flex-shrink: 0;
+	text-align: right;
+	padding: 0 6dp 0 4dp;
 }
 
 .pve-stats-empty {
-    color: #9aa7a2;
-    font-size: 11dp;
-    padding-top: 3dp;
+	color: #666666;
+	font-size: 0.917em;
+	padding: 8dp 4dp 6dp 4dp;
+	text-align: center;
 }
 
 .pve-stats-error {
-    margin-top: 7dp;
-    color: #f0a38c;
-    font-size: 10dp;
+	padding: 4dp 8dp 6dp 8dp;
+	color: #FF9999;
+	font-size: 0.833em;
+	background-color: #0F1419;
 }
 
 .hidden {
-    display: none;
+	display: none;
 }
