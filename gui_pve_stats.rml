@@ -53,7 +53,7 @@
             <div class="table-header">
                 <span class="pve-stats-th-player">Player</span>
                 <span id="pve-stats-player-exact-wins-label" class="pve-stats-th-stat">Exact Wins</span>
-                <span class="pve-stats-th-stat">Harder Wins</span>
+                <span class="pve-stats-th-stat">Incl. Harder</span>
                 <span class="pve-stats-th-rating">Rating</span>
             </div>
             <div id="pve-stats-players" class="pve-stats-players"></div>

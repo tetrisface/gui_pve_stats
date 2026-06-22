@@ -297,6 +297,7 @@ local function testResponseUsesApiMatchStatus()
 	assertEquals(view.modeText, "Raptors")
 	assertEquals(view.statusText, "Ready")
 	assertEquals(view.matchText, "Closest")
+	assertEquals(view.isExactMatch, false)
 	assertEquals(view.difficultyText, "23.8")
 	assertEquals(view.exactWinsText, "80")
 	assertEquals(view.extendedWinsText, "100")
@@ -315,6 +316,7 @@ local function testResponseUsesApiMatchStatus()
 	assertTrue(string.find(view.diffsRml, "tweakdefs", 1, true) == nil)
 	assertTrue(string.find(view.diffsRml, "ai_type", 1, true) == nil)
 	assertTrue(string.find(view.playersRml, "&lt;Ace&gt;", 1, true) ~= nil)
+	assertTrue(string.find(view.playersRml, "<span class=\"pve-stats-player-stat\">3</span><span class=\"pve-stats-player-stat\">7</span>", 1, true) ~= nil)
 	assertTrue(string.find(view.playersRml, "21.2", 1, true) ~= nil)
 
 	local exactView = Model.ViewModelFromResponse({
@@ -325,6 +327,7 @@ local function testResponseUsesApiMatchStatus()
 		},
 	}, nil, request)
 	assertEquals(exactView.matchText, "Exact")
+	assertEquals(exactView.isExactMatch, true)
 	assertEquals(exactView.winsLabelText, "Exact Wins")
 	assertEquals(exactView.hasDiffs, false)
 
@@ -333,6 +336,50 @@ local function testResponseUsesApiMatchStatus()
 		match_status = "not_found",
 	}, nil, request)
 	assertEquals(notFoundView.matchText, "Not found")
+	assertEquals(notFoundView.isExactMatch, false)
+end
+
+local function testClientVersionNoticeIsInformational()
+	local request = {
+		ai_type = "Raptors",
+	}
+	local function viewForVersion(clientVersion)
+		return Model.ViewModelFromResponse({
+			found = true,
+			match_status = "exact",
+			client_version = clientVersion,
+			setting = {
+				exact_wins = 12,
+				extended_wins = 14,
+				unique_players = 3,
+				difficulty_rating = 18.25,
+			},
+			players = {},
+		}, nil, request)
+	end
+
+	local missing = viewForVersion(nil)
+	assertEquals(missing.statusText, "Ready")
+	assertEquals(missing.hasNotice, false)
+	assertEquals(missing.noticeText, "")
+	assertEquals(missing.exactWinsText, "12")
+
+	local same = viewForVersion(Model.CLIENT_VERSION)
+	assertEquals(same.statusText, "Ready")
+	assertEquals(same.hasNotice, false)
+
+	local older = viewForVersion(Model.CLIENT_VERSION - 1)
+	assertEquals(older.statusText, "Ready")
+	assertEquals(older.hasNotice, false)
+
+	local newer = viewForVersion(Model.CLIENT_VERSION + 1)
+	assertEquals(newer.statusText, "Update")
+	assertEquals(newer.hasNotice, true)
+	assertEquals(newer.hasError, false)
+	assertTrue(string.find(newer.noticeText, "Widget update available", 1, true) ~= nil)
+	assertTrue(string.find(newer.noticeText, "v" .. tostring(Model.CLIENT_VERSION + 1), 1, true) ~= nil)
+	assertEquals(newer.exactWinsText, "12")
+	assertEquals(newer.difficultyText, "18.2")
 end
 
 local function testClosestDiffsCanExpandHiddenVisibleRows()
@@ -450,6 +497,7 @@ local function testPlayerRowsUseColorLookup()
 	})
 
 	assertTrue(string.find(rows, "background-color: #12ABEF", 1, true) ~= nil)
+	assertTrue(string.find(rows, "<span class=\"pve-stats-player-stat\">1</span><span class=\"pve-stats-player-stat\">3</span>", 1, true) ~= nil)
 end
 
 local function testSpectatorsRenderAsSeparateGroupWhenEnabled()
@@ -549,12 +597,12 @@ local function testPlayersAndSpectatorsSortByWinsRatingAndName()
 		},
 	}, nil, request, nil, {showSpectators = true})
 
+	assertBefore(view.playersRml, "Delta", "Aaron")
 	assertBefore(view.playersRml, "Aaron", "Alice")
 	assertBefore(view.playersRml, "Alice", "Bob")
 	assertBefore(view.playersRml, "Bob", "Clara")
-	assertBefore(view.playersRml, "Clara", "Delta")
-	assertBefore(view.playersRml, "SpecHigh", "SpecA")
 	assertBefore(view.playersRml, "SpecA", "SpecZ")
+	assertBefore(view.playersRml, "SpecZ", "SpecHigh")
 end
 
 testBoundedExponentialBackoffSeconds()
@@ -568,6 +616,7 @@ testDetectsBarbarianFromGenericAiTeam()
 testDetectsBarbarianFromTeamLuaAi()
 testWireRequestStripsLocalFields()
 testResponseUsesApiMatchStatus()
+testClientVersionNoticeIsInformational()
 testClosestDiffsCanExpandHiddenVisibleRows()
 testClosestDiffsRoundFloatNoiseToModOptionSteps()
 testClosestDiffsCleanFloatNoiseWithoutStepMetadata()

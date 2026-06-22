@@ -1,5 +1,7 @@
 local Model = {}
 
+Model.CLIENT_VERSION = 1
+
 local function CopyTable(source)
 	local copy = {}
 	for key, value in pairs(source or {}) do
@@ -345,6 +347,29 @@ local function FormatNumber(value, decimals)
 	return string.format("%." .. tostring(decimals or 0) .. "f", number)
 end
 
+local function FormatInteger(value)
+	local number = tonumber(value)
+	if not number then
+		return nil
+	end
+	return string.format("%d", math.floor(number))
+end
+
+local function ApiClientVersion(response)
+	return tonumber(response and response.client_version)
+end
+
+local function ClientUpdateNotice(response)
+	local apiVersion = ApiClientVersion(response)
+	if apiVersion and apiVersion > Model.CLIENT_VERSION then
+		return table.concat({
+			"Widget update available: v",
+			FormatInteger(apiVersion) or tostring(apiVersion),
+		})
+	end
+	return ""
+end
+
 function Model.BoundedExponentialBackoffSeconds(attempt, initialSeconds, maxSeconds)
 	local safeAttempt = math.max(1, tonumber(attempt) or 1)
 	local safeInitial = math.max(0, tonumber(initialSeconds) or 0)
@@ -399,6 +424,19 @@ local function MatchResultText(response, setting)
 		return "Draw"
 	end
 	return text
+end
+
+local function IsExactMatch(response, setting)
+	local value = FirstDisplayValue(
+		response and response.match_status,
+		response and response.match_result,
+		response and response.match,
+		response and response.result,
+		setting and setting.match_result,
+		setting and setting.match,
+		setting and setting.result
+	)
+	return string.lower(tostring(value or "")) == "exact"
 end
 
 local function IsClosestResponse(response)
@@ -650,16 +688,25 @@ local function NumberForDescendingSort(value)
 	return tonumber(value) or -math.huge
 end
 
+local function PlayerWinsIncludingHarder(player)
+	local exactWins = tonumber(player and player.exact_wins)
+	local harderWins = tonumber(player and player.harder_wins)
+	if exactWins == nil and harderWins == nil then
+		return nil
+	end
+	return (exactWins or 0) + (harderWins or 0)
+end
+
 local function PlayerNameForAscendingSort(player)
 	local name = tostring(player and player.player_name or "")
 	return string.lower(name), name
 end
 
 local function PlayerComesBefore(left, right)
-	local leftHarderWins = NumberForDescendingSort(left and left.harder_wins)
-	local rightHarderWins = NumberForDescendingSort(right and right.harder_wins)
-	if leftHarderWins ~= rightHarderWins then
-		return leftHarderWins > rightHarderWins
+	local leftInclusiveWins = NumberForDescendingSort(PlayerWinsIncludingHarder(left))
+	local rightInclusiveWins = NumberForDescendingSort(PlayerWinsIncludingHarder(right))
+	if leftInclusiveWins ~= rightInclusiveWins then
+		return leftInclusiveWins > rightInclusiveWins
 	end
 
 	local leftClosestWins = NumberForDescendingSort(left and left.exact_wins)
@@ -723,7 +770,7 @@ function Model.PlayerRowsRml(players, colorLookup)
 			"<div class=\"pve-stats-player-accent\" style=\"background-color: ", color, ";\"></div>",
 			"<span class=\"pve-stats-player-name\">", name, "</span>",
 			"<span class=\"pve-stats-player-stat\">", FormatNumber(player.exact_wins, 0), "</span>",
-			"<span class=\"pve-stats-player-stat\">", FormatNumber(player.harder_wins, 0), "</span>",
+			"<span class=\"pve-stats-player-stat\">", FormatNumber(PlayerWinsIncludingHarder(player), 0), "</span>",
 			"<span class=\"pve-stats-player-rating\">", FormatNumber(player.player_rating, 1), "</span>",
 			"</div>",
 		})
@@ -762,14 +809,19 @@ function Model.EmptyViewModel()
 		totalPlayersLabelText = "Exact Total Players",
 		playerWinsLabelText = "Exact Wins",
 		matchText = "-",
+		isExactMatch = false,
 		errorText = "",
+		noticeText = "",
 		playersRml = "<div class=\"pve-stats-empty\">No player stats</div>",
 		diffsRml = "",
 		spectatorText = "Spec",
 		hasError = false,
+		hasNotice = false,
 		hasPlayers = false,
 		hasDiffs = false,
 		showSpectators = false,
+		clientVersion = Model.CLIENT_VERSION,
+		apiClientVersion = nil,
 	}
 end
 
@@ -794,12 +846,19 @@ function Model.ViewModelFromResponse(response, errorMessage, request, colorLooku
 
 	local setting = response.setting or {}
 	view.statusText = "Ready"
+	view.apiClientVersion = ApiClientVersion(response)
+	view.noticeText = ClientUpdateNotice(response)
+	view.hasNotice = view.noticeText ~= ""
+	if view.hasNotice then
+		view.statusText = "Update"
+	end
 	view.difficultyText = FormatNumber(setting.difficulty_rating, 1)
 	view.exactWinsText = FormatNumber(setting.exact_wins, 0)
 	view.extendedWinsText = FormatNumber(setting.extended_wins, 0)
 	view.exactTotalPlayersText = FormatNumber(setting.unique_players, 0)
 	view.winsLabelText, view.totalPlayersLabelText, view.playerWinsLabelText = WinsLabels(response)
 	view.matchText = MatchResultText(response, setting)
+	view.isExactMatch = IsExactMatch(response, setting)
 	view.diffsRml, view.hasDiffs = ClosestDiffsRml(response, options)
 	local activePlayers, spectators = SplitPlayers(response.players, request)
 	if view.showSpectators then

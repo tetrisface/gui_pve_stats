@@ -44,6 +44,7 @@ local HASH_MODULO = 4294967296
 
 local Model = VFS.Include('luaui/rmlwidgets/gui_pve_stats/include/pve_stats_rml_model.lua')
 local Json = Json or VFS.Include('common/luaUtilities/json.lua')
+local CLIENT_VERSION = Model.CLIENT_VERSION or 1
 
 local socketLib = socket
 
@@ -134,8 +135,10 @@ local function ApplyViewModel(viewModel)
 		dm.playerWinsLabelText = state.viewModel.playerWinsLabelText
 		dm.matchText = state.viewModel.matchText
 		dm.errorText = state.viewModel.errorText
+		dm.noticeText = state.viewModel.noticeText
 	end
 
+	local messageText = state.viewModel.hasError and state.viewModel.errorText or state.viewModel.noticeText
 	SetText('pve-stats-status', state.viewModel.statusText)
 	SetText('pve-stats-mode', state.viewModel.modeText)
 	SetText('pve-stats-difficulty', state.viewModel.difficultyText)
@@ -147,12 +150,15 @@ local function ApplyViewModel(viewModel)
 	SetText('pve-stats-player-exact-wins-label', state.viewModel.playerWinsLabelText)
 	SetText('pve-stats-match', state.viewModel.matchText)
 	SetText('pve-stats-spectators-toggle', state.viewModel.spectatorText)
-	SetText('pve-stats-error', state.viewModel.errorText)
+	SetText('pve-stats-error', messageText)
 	SetRml('pve-stats-players', state.viewModel.playersRml)
 	SetRml('pve-stats-diffs', state.viewModel.diffsRml)
 	SetClass('pve-stats-root', 'has-error', state.viewModel.hasError)
+	SetClass('pve-stats-root', 'has-notice', state.viewModel.hasNotice and not state.viewModel.hasError)
 	SetClass('pve-stats-status', 'hidden', state.viewModel.statusText == 'Ready')
-	SetClass('pve-stats-error', 'hidden', not state.viewModel.hasError)
+	SetClass('pve-stats-match', 'exact-match', state.viewModel.isExactMatch)
+	SetClass('pve-stats-error', 'notice', state.viewModel.hasNotice and not state.viewModel.hasError)
+	SetClass('pve-stats-error', 'hidden', not state.viewModel.hasError and not state.viewModel.hasNotice)
 	SetClass('pve-stats-diffs', 'hidden', not state.viewModel.hasDiffs)
 	SetClass('pve-stats-spectators-toggle', 'active', state.viewModel.showSpectators)
 end
@@ -291,6 +297,7 @@ local function BuildRequestEvidence(endpoint, body, request)
 		request_bytes = #tostring(body or ''),
 		request_hash = StableHash(body),
 		request_key_hash = StableHash(request and request._request_key or ''),
+		client_version = CLIENT_VERSION,
 	}
 end
 
@@ -381,6 +388,10 @@ local function FormatEvidence(evidence)
 		tostring(evidence.request_hash or '-'),
 		' request_key_hash=',
 		tostring(evidence.request_key_hash or '-'),
+		' client_version=',
+		tostring(evidence.client_version or '-'),
+		' api_client_version=',
+		tostring(evidence.api_client_version or '-'),
 		' request_bytes=',
 		tostring(evidence.request_bytes or 0),
 		' response_hash=',
@@ -568,6 +579,7 @@ local function CompleteEvidence(evidence, response, err, meta)
 	if response then
 		evidence.match_status = response.match_status
 		evidence.setting_hash = response.setting_hash
+		evidence.api_client_version = response.client_version
 	end
 	state.lastEvidence = evidence
 	MaybeLogEvidence(evidence)
