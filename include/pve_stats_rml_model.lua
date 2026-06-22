@@ -8,6 +8,43 @@ local function CopyTable(source)
 	return copy
 end
 
+local function AddModOptionStep(lookup, key, step)
+	local optionKey = tostring(key or "")
+	local numericStep = tonumber(step)
+	if optionKey == "" or not numericStep or numericStep <= 0 then
+		return
+	end
+	lookup[optionKey] = numericStep
+	lookup[string.lower(optionKey)] = numericStep
+end
+
+local function CollectModOptionSteps(definitions, lookup, seen)
+	if type(definitions) ~= "table" then
+		return
+	end
+	if seen[definitions] then
+		return
+	end
+	seen[definitions] = true
+
+	AddModOptionStep(lookup, definitions.key or definitions.name or definitions.id, definitions.step)
+	for key, value in pairs(definitions) do
+		if type(value) == "table" then
+			AddModOptionStep(lookup, key, value.step)
+			CollectModOptionSteps(value.options or value.items or value.children or value.entries, lookup, seen)
+			CollectModOptionSteps(value, lookup, seen)
+		end
+	end
+end
+
+function Model.ModOptionStepLookup(...)
+	local lookup = {}
+	for index = 1, select("#", ...) do
+		CollectModOptionSteps(select(index, ...), lookup, {})
+	end
+	return lookup
+end
+
 local function AppendValue(parts, value)
 	local text = tostring(value or "")
 	parts[#parts + 1] = tostring(#text)
@@ -402,8 +439,103 @@ local function DiffValueText(value)
 	return "<complex>"
 end
 
-local function SameDiffValue(left, right)
-	return DiffValueText(left) == DiffValueText(right)
+local function TrimTrailingZeros(text)
+	text = string.gsub(text, "(%..-)0+$", "%1")
+	return string.gsub(text, "%.$", "")
+end
+
+local function RoundNumber(value)
+	if value >= 0 then
+		return math.floor(value + 0.5)
+	end
+	return math.ceil(value - 0.5)
+end
+
+local function DecimalPlacesForStep(step)
+	local text = tostring(step)
+	if string.find(text, "[eE]") then
+		text = string.format("%.10f", tonumber(step) or 0)
+	end
+	text = TrimTrailingZeros(text)
+	local dotIndex = string.find(text, ".", 1, true)
+	if not dotIndex then
+		return 0
+	end
+	return math.max(0, #text - dotIndex)
+end
+
+local function FormatRoundedNumber(value, decimals)
+	local places = math.max(0, tonumber(decimals) or 0)
+	return TrimTrailingZeros(string.format("%." .. tostring(places) .. "f", value))
+end
+
+local function RoundToStep(value, step)
+	local numericStep = tonumber(step)
+	if not numericStep or numericStep <= 0 then
+		return value
+	end
+	return RoundNumber(value / numericStep) * numericStep
+end
+
+local function NumericValue(value)
+	local number = tonumber(value)
+	if not number then
+		return nil
+	end
+	return number
+end
+
+local function CleanFloatNoise(value, number)
+	local text = tostring(value)
+	if not string.find(text, "[%.eE]") then
+		return text
+	end
+	for decimals = 0, 6 do
+		local factor = 10 ^ decimals
+		local rounded = RoundNumber(number * factor) / factor
+		if math.abs(number - rounded) < 0.000001 then
+			return FormatRoundedNumber(rounded, decimals)
+		end
+	end
+	return text
+end
+
+local function LookupStep(lookup, column)
+	if not lookup or not column then
+		return nil
+	end
+	return tonumber(lookup[column] or lookup[tostring(column)] or lookup[string.lower(tostring(column))])
+end
+
+local function DiffStep(diff, options, response, topMatch)
+	local explicit = diff and (diff.step or diff.option_step or diff.modoption_step or diff.mod_option_step)
+	local explicitStep = tonumber(explicit)
+	if explicitStep and explicitStep > 0 then
+		return explicitStep
+	end
+
+	local column = diff and diff.column
+	return LookupStep(options and options.modOptionSteps, column)
+		or LookupStep(response and (response.mod_option_steps or response.modoption_steps), column)
+		or LookupStep(topMatch and (topMatch.mod_option_steps or topMatch.modoption_steps), column)
+end
+
+local function DiffDisplayValue(value, diff, options, response, topMatch)
+	local text = DiffValueText(value)
+	local number = NumericValue(value)
+	if not number then
+		return text
+	end
+
+	local step = DiffStep(diff, options, response, topMatch)
+	if step then
+		return FormatRoundedNumber(RoundToStep(number, step), DecimalPlacesForStep(step))
+	end
+	return CleanFloatNoise(value, number)
+end
+
+local function SameDiffValue(diff, options, response, topMatch)
+	return DiffDisplayValue(diff.incoming, diff, options, response, topMatch) == DiffDisplayValue(diff.expected, diff, options, response, topMatch)
 end
 
 local function ClosestDiffsRml(response, options)
@@ -419,7 +551,7 @@ local function ClosestDiffsRml(response, options)
 
 	for _, diff in ipairs(diffs) do
 		local column = diff and diff.column
-		if not HiddenDiffColumn(column) and not SameDiffValue(diff.incoming, diff.expected) then
+		if not HiddenDiffColumn(column) and not SameDiffValue(diff, options, response, topMatch) then
 			visibleCount = visibleCount + 1
 			visibleDiffs[#visibleDiffs + 1] = diff
 		end
@@ -428,17 +560,21 @@ local function ClosestDiffsRml(response, options)
 	if visibleCount == 0 then
 		return "", false
 	end
+	rows[#rows + 1] = table.concat({
+		"<div class=\"pve-stats-diff-row pve-stats-diff-header\">",
+		"<span class=\"pve-stats-diff-field\">Field</span>",
+		"<span class=\"pve-stats-diff-current\">Current</span>",
+		"<span class=\"pve-stats-diff-closest\">Closest</span>",
+		"</div>",
+	})
 	local rowLimit = expanded and visibleCount or collapsedLimit
 	for index, diff in ipairs(visibleDiffs) do
 		if index <= rowLimit then
 			rows[#rows + 1] = table.concat({
 				"<div class=\"pve-stats-diff-row\">",
-				"<span class=\"pve-stats-diff-key\">", Model.EscapeRml(diff.column), "</span>",
-				"<span class=\"pve-stats-diff-values\">",
-				Model.EscapeRml(DiffValueText(diff.incoming)),
-				" -> ",
-				Model.EscapeRml(DiffValueText(diff.expected)),
-				"</span>",
+				"<span class=\"pve-stats-diff-field\">", Model.EscapeRml(diff.column), "</span>",
+				"<span class=\"pve-stats-diff-current\">", Model.EscapeRml(DiffDisplayValue(diff.incoming, diff, options, response, topMatch)), "</span>",
+				"<span class=\"pve-stats-diff-closest\">", Model.EscapeRml(DiffDisplayValue(diff.expected, diff, options, response, topMatch)), "</span>",
 				"</div>",
 			})
 		end

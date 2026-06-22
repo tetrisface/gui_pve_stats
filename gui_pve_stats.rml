@@ -9,11 +9,11 @@
             <handle move_target="pve-stats-root">
                 <div class="title-content">
                     <span class="title-text">PvE Stats</span>
+                    <div id="pve-stats-status" class="title-status ctrl-btn active hidden">Ready</div>
                 </div>
             </handle>
             <div class="title-controls">
                 <div id="pve-stats-spectators-toggle" class="ctrl-btn" onclick="widget:ToggleSpectators(event)">Spec</div>
-                <div id="pve-stats-status" class="ctrl-btn active">Ready</div>
             </div>
         </div>
 

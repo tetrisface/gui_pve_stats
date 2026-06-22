@@ -49,6 +49,7 @@ div {
 .title-content {
 	display: flex;
 	align-items: center;
+	gap: 4dp;
 }
 
 .title-text {
@@ -74,6 +75,10 @@ div {
 	color: #66CCFF;
 	background-color: #1A2A3A;
 	font-weight: bold;
+}
+
+.title-status {
+	flex-shrink: 0;
 }
 
 .pve-stats-summary {
@@ -126,7 +131,7 @@ div {
 	padding: 1dp 0;
 }
 
-.pve-stats-diff-key {
+.pve-stats-diff-field {
 	color: #66CCFF;
 	font-size: 0.75em;
 	width: 118dp;
@@ -134,11 +139,30 @@ div {
 	overflow: hidden;
 }
 
-.pve-stats-diff-values {
+.pve-stats-diff-current,
+.pve-stats-diff-closest {
 	color: #AABBCC;
 	font-size: 0.75em;
 	flex: 1;
 	overflow: hidden;
+	padding-left: 4dp;
+}
+
+.pve-stats-diff-header {
+	min-height: 12dp;
+	padding-bottom: 2dp;
+}
+
+.pve-stats-diff-header .pve-stats-diff-field,
+.pve-stats-diff-header .pve-stats-diff-current,
+.pve-stats-diff-header .pve-stats-diff-closest {
+	color: #8099B3;
+	font-size: 0.7em;
+	font-weight: bold;
+}
+
+.pve-stats-diff-closest {
+	color: #CCE6FF;
 }
 
 .pve-stats-diff-more {

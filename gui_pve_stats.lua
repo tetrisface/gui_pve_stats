@@ -62,6 +62,9 @@ local state = {
 	retryActive = false,
 	showSpectators = false,
 	diffsExpanded = false,
+	modOptionSteps = nil,
+	modOptionDefsLoaded = false,
+	modOptionDefs = nil,
 }
 
 local function GetConfigString(key, defaultValue)
@@ -148,6 +151,7 @@ local function ApplyViewModel(viewModel)
 	SetRml('pve-stats-players', state.viewModel.playersRml)
 	SetRml('pve-stats-diffs', state.viewModel.diffsRml)
 	SetClass('pve-stats-root', 'has-error', state.viewModel.hasError)
+	SetClass('pve-stats-status', 'hidden', state.viewModel.statusText == 'Ready')
 	SetClass('pve-stats-error', 'hidden', not state.viewModel.hasError)
 	SetClass('pve-stats-diffs', 'hidden', not state.viewModel.hasDiffs)
 	SetClass('pve-stats-spectators-toggle', 'active', state.viewModel.showSpectators)
@@ -237,10 +241,36 @@ local function BuildPlayerColorLookup()
 	return lookup
 end
 
+local function LoadModOptionDefs()
+	if state.modOptionDefsLoaded then
+		return state.modOptionDefs
+	end
+	state.modOptionDefsLoaded = true
+	if VFS and VFS.Include then
+		local ok, definitions = pcall(VFS.Include, 'gamedata/modoptions.lua')
+		if ok then
+			state.modOptionDefs = definitions
+		end
+	end
+	return state.modOptionDefs
+end
+
+local function BuildModOptionStepLookup()
+	if state.modOptionSteps then
+		return state.modOptionSteps
+	end
+	state.modOptionSteps = Model.ModOptionStepLookup(
+		Game and (Game.modOptions or Game.modoptions or Game.mod_options),
+		LoadModOptionDefs()
+	)
+	return state.modOptionSteps
+end
+
 local function BuildViewModel(response, err, request)
 	return Model.ViewModelFromResponse(response, err, request, BuildPlayerColorLookup(), {
 		showSpectators = state.showSpectators,
 		diffExpanded = state.diffsExpanded,
+		modOptionSteps = BuildModOptionStepLookup(),
 	})
 end
 

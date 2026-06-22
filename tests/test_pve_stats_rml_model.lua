@@ -106,6 +106,26 @@ local function testBuildRequestUsesIterableModOptionsCopyWhenAvailable()
 	assertEquals(request.game_settings.raptor_difficulty, "hard")
 end
 
+local function testModOptionStepLookupUsesNestedDefinitions()
+	local lookup = Model.ModOptionStepLookup({
+		{
+			key = "multiplier_builddistance",
+			step = 0.1,
+		},
+		{
+			options = {
+				{
+					key = "raptor_graceperiodmult",
+					step = "0.25",
+				},
+			},
+		},
+	})
+
+	assertEquals(lookup.multiplier_builddistance, 0.1)
+	assertEquals(lookup.raptor_graceperiodmult, 0.25)
+end
+
 local function testDetectsRaptorsFromTeamLuaAiWithoutIncidentalScavengerText()
 	local spring = {
 		GetTeamList = function() return {7} end,
@@ -286,7 +306,10 @@ local function testResponseUsesApiMatchStatus()
 	assertEquals(view.playerWinsLabelText, "Closest Wins")
 	assertEquals(view.hasDiffs, true)
 	assertTrue(string.find(view.diffsRml, "raptor_difficulty", 1, true) ~= nil)
-	assertTrue(string.find(view.diffsRml, "epic -> hard", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "Current -> Closest", 1, true) == nil)
+	assertTrue(string.find(view.diffsRml, "Field</span><span class=\"pve-stats-diff-current\">Current</span><span class=\"pve-stats-diff-closest\">Closest", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "pve-stats-diff-current", 1, true) ~= nil)
+	assertBefore(view.diffsRml, "epic", "hard")
 	assertTrue(string.find(view.diffsRml, "raw_only_field", 1, true) == nil)
 	assertTrue(string.find(view.diffsRml, "startmetal", 1, true) == nil)
 	assertTrue(string.find(view.diffsRml, "tweakdefs", 1, true) == nil)
@@ -356,6 +379,62 @@ local function testClosestDiffsCanExpandHiddenVisibleRows()
 	assertTrue(string.find(expanded.diffsRml, "assistdronesenabled", 1, true) ~= nil)
 	assertTrue(string.find(expanded.diffsRml, "tweakdefs", 1, true) == nil)
 	assertTrue(string.find(expanded.diffsRml, "startenergy", 1, true) == nil)
+end
+
+local function testClosestDiffsRoundFloatNoiseToModOptionSteps()
+	local request = {
+		ai_type = "Raptors",
+	}
+	local response = {
+		found = false,
+		match_status = "closest",
+		closest_matches = {
+			{
+				display_diffs = {
+					{column = "multiplier_builddistance", incoming = "1.70000005", expected = "1.5"},
+					{column = "multiplier_buildpower", incoming = "1.39999998", expected = "1.29999995"},
+					{column = "multiplier_same", incoming = "1.70000005", expected = "1.7"},
+				},
+			},
+		},
+	}
+	local view = Model.ViewModelFromResponse(response, nil, request, nil, {
+		modOptionSteps = {
+			multiplier_builddistance = 0.1,
+			multiplier_buildpower = 0.1,
+			multiplier_same = 0.1,
+		},
+	})
+
+	assertEquals(view.hasDiffs, true)
+	assertTrue(string.find(view.diffsRml, "Closest differs by 2 shown fields", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "1.70000005", 1, true) == nil)
+	assertTrue(string.find(view.diffsRml, "1.39999998", 1, true) == nil)
+	assertTrue(string.find(view.diffsRml, "1.29999995", 1, true) == nil)
+	assertTrue(string.find(view.diffsRml, "multiplier_same", 1, true) == nil)
+	assertBefore(view.diffsRml, "1.7", "1.5")
+	assertBefore(view.diffsRml, "1.4", "1.3")
+end
+
+local function testClosestDiffsCleanFloatNoiseWithoutStepMetadata()
+	local request = {
+		ai_type = "Raptors",
+	}
+	local view = Model.ViewModelFromResponse({
+		found = false,
+		match_status = "closest",
+		closest_matches = {
+			{
+				display_diffs = {
+					{column = "multiplier_resourceincome", incoming = "1.89999998", expected = "1.5"},
+				},
+			},
+		},
+	}, nil, request)
+
+	assertEquals(view.hasDiffs, true)
+	assertTrue(string.find(view.diffsRml, "1.89999998", 1, true) == nil)
+	assertBefore(view.diffsRml, "1.9", "1.5")
 end
 
 local function testPlayerRowsUseColorLookup()
@@ -481,6 +560,7 @@ end
 testBoundedExponentialBackoffSeconds()
 testBuildRequestUsesInGameContext()
 testBuildRequestUsesIterableModOptionsCopyWhenAvailable()
+testModOptionStepLookupUsesNestedDefinitions()
 testDetectsRaptorsFromTeamLuaAiWithoutIncidentalScavengerText()
 testAmbiguousPveAiIdentityFailsClosed()
 testDetectsBarbarianFromAiInfo()
@@ -489,6 +569,8 @@ testDetectsBarbarianFromTeamLuaAi()
 testWireRequestStripsLocalFields()
 testResponseUsesApiMatchStatus()
 testClosestDiffsCanExpandHiddenVisibleRows()
+testClosestDiffsRoundFloatNoiseToModOptionSteps()
+testClosestDiffsCleanFloatNoiseWithoutStepMetadata()
 testPlayerRowsUseColorLookup()
 testSpectatorsRenderAsSeparateGroupWhenEnabled()
 testPlayersAndSpectatorsSortByWinsRatingAndName()
