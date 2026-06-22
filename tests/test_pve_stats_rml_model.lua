@@ -13,6 +13,14 @@ local function assertTrue(value, message)
 	end
 end
 
+local function assertBefore(text, left, right, message)
+	local leftIndex = string.find(text, left, 1, true)
+	local rightIndex = string.find(text, right, 1, true)
+	assertTrue(leftIndex ~= nil, "missing left value: " .. tostring(left))
+	assertTrue(rightIndex ~= nil, "missing right value: " .. tostring(right))
+	assertTrue(leftIndex < rightIndex, message or (tostring(left) .. " should appear before " .. tostring(right)))
+end
+
 local function testBoundedExponentialBackoffSeconds()
 	assertEquals(Model.BoundedExponentialBackoffSeconds(1, 2, 30), 2)
 	assertEquals(Model.BoundedExponentialBackoffSeconds(2, 2, 30), 4)
@@ -304,6 +312,52 @@ local function testResponseUsesApiMatchStatus()
 	assertEquals(notFoundView.matchText, "Not found")
 end
 
+local function testClosestDiffsCanExpandHiddenVisibleRows()
+	local request = {
+		ai_type = "Raptors",
+	}
+	local response = {
+		found = false,
+		match_status = "closest",
+		closest_matches = {
+			{
+				display_diffs = {
+					{column = "Map", incoming = "A", expected = "B"},
+					{column = "raptor_difficulty", incoming = "epic", expected = "hard"},
+					{column = "startmetal", incoming = "1000", expected = "2000"},
+					{column = "multiplier_buildpower", incoming = "1.7", expected = "1.5"},
+					{column = "ruins", incoming = "disabled", expected = "enabled"},
+					{column = "lootboxes", incoming = "disabled", expected = "enabled"},
+					{column = "commanderbuildersenabled", incoming = "disabled", expected = "true"},
+					{column = "assistdronesenabled", incoming = "enabled", expected = "false"},
+					{column = "tweakdefs", incoming = "opaque", expected = "other"},
+					{column = "startenergy", incoming = "1000", expected = "1000"},
+				},
+			},
+		},
+		setting = {
+			difficulty_rating = 23.75,
+		},
+	}
+
+	local collapsed = Model.ViewModelFromResponse(response, nil, request)
+	assertEquals(collapsed.hasDiffs, true)
+	assertTrue(string.find(collapsed.diffsRml, "Closest differs by 8 shown fields", 1, true) ~= nil)
+	assertTrue(string.find(collapsed.diffsRml, "+2 more", 1, true) ~= nil)
+	assertTrue(string.find(collapsed.diffsRml, "widget:ToggleDiffs(event)", 1, true) ~= nil)
+	assertTrue(string.find(collapsed.diffsRml, "commanderbuildersenabled", 1, true) == nil)
+	assertTrue(string.find(collapsed.diffsRml, "assistdronesenabled", 1, true) == nil)
+	assertTrue(string.find(collapsed.diffsRml, "tweakdefs", 1, true) == nil)
+	assertTrue(string.find(collapsed.diffsRml, "startenergy", 1, true) == nil)
+
+	local expanded = Model.ViewModelFromResponse(response, nil, request, nil, {diffExpanded = true})
+	assertTrue(string.find(expanded.diffsRml, "Show fewer", 1, true) ~= nil)
+	assertTrue(string.find(expanded.diffsRml, "commanderbuildersenabled", 1, true) ~= nil)
+	assertTrue(string.find(expanded.diffsRml, "assistdronesenabled", 1, true) ~= nil)
+	assertTrue(string.find(expanded.diffsRml, "tweakdefs", 1, true) == nil)
+	assertTrue(string.find(expanded.diffsRml, "startenergy", 1, true) == nil)
+end
+
 local function testPlayerRowsUseColorLookup()
 	local rows = Model.PlayerRowsRml({
 		{
@@ -352,6 +406,78 @@ local function testSpectatorsRenderAsSeparateGroupWhenEnabled()
 	assertTrue(string.find(view.playersRml, "SpecBob", 1, true) ~= nil)
 end
 
+local function testPlayersAndSpectatorsSortByWinsRatingAndName()
+	local request = {
+		ai_type = "Raptors",
+		_active_player_names = {"Aaron", "Alice", "Bob", "Clara", "Delta"},
+		_spectator_names = {"SpecA", "SpecHigh", "SpecZ"},
+	}
+	local view = Model.ViewModelFromResponse({
+		found = true,
+		match_status = "closest",
+		setting = {
+			difficulty_rating = 10,
+		},
+		players = {
+			{
+				player_name = "Delta",
+				exact_wins = 99,
+				harder_wins = 4,
+				player_rating = 99,
+			},
+			{
+				player_name = "Bob",
+				exact_wins = 10,
+				harder_wins = 5,
+				player_rating = 1,
+			},
+			{
+				player_name = "SpecZ",
+				exact_wins = 1,
+				harder_wins = 1,
+				player_rating = 1,
+			},
+			{
+				player_name = "Alice",
+				exact_wins = 10,
+				harder_wins = 5,
+				player_rating = 7,
+			},
+			{
+				player_name = "SpecHigh",
+				exact_wins = 0,
+				harder_wins = 2,
+				player_rating = 0,
+			},
+			{
+				player_name = "Clara",
+				exact_wins = 8,
+				harder_wins = 5,
+				player_rating = 5,
+			},
+			{
+				player_name = "Aaron",
+				exact_wins = 10,
+				harder_wins = 5,
+				player_rating = 7,
+			},
+			{
+				player_name = "SpecA",
+				exact_wins = 1,
+				harder_wins = 1,
+				player_rating = 1,
+			},
+		},
+	}, nil, request, nil, {showSpectators = true})
+
+	assertBefore(view.playersRml, "Aaron", "Alice")
+	assertBefore(view.playersRml, "Alice", "Bob")
+	assertBefore(view.playersRml, "Bob", "Clara")
+	assertBefore(view.playersRml, "Clara", "Delta")
+	assertBefore(view.playersRml, "SpecHigh", "SpecA")
+	assertBefore(view.playersRml, "SpecA", "SpecZ")
+end
+
 testBoundedExponentialBackoffSeconds()
 testBuildRequestUsesInGameContext()
 testBuildRequestUsesIterableModOptionsCopyWhenAvailable()
@@ -362,7 +488,9 @@ testDetectsBarbarianFromGenericAiTeam()
 testDetectsBarbarianFromTeamLuaAi()
 testWireRequestStripsLocalFields()
 testResponseUsesApiMatchStatus()
+testClosestDiffsCanExpandHiddenVisibleRows()
 testPlayerRowsUseColorLookup()
 testSpectatorsRenderAsSeparateGroupWhenEnabled()
+testPlayersAndSpectatorsSortByWinsRatingAndName()
 
 print("test_pve_stats_rml_model.lua: ok")

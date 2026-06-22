@@ -16,7 +16,7 @@ function widget:GetInfo()
 	}
 end
 
-local DEV = 1
+local DEV = 0
 local LOG_SECTION = 'pve_stats_rml'
 local LOG_PREFIX = 'pve_stats'
 local MODEL_NAME = 'pve_stats_model'
@@ -61,6 +61,7 @@ local state = {
 	retryAttempt = 0,
 	retryActive = false,
 	showSpectators = false,
+	diffsExpanded = false,
 }
 
 local function GetConfigString(key, defaultValue)
@@ -239,6 +240,7 @@ end
 local function BuildViewModel(response, err, request)
 	return Model.ViewModelFromResponse(response, err, request, BuildPlayerColorLookup(), {
 		showSpectators = state.showSpectators,
+		diffExpanded = state.diffsExpanded,
 	})
 end
 
@@ -608,6 +610,7 @@ local function FetchStats()
 	DebugLog('fetch_post endpoint=' .. tostring(evidence.endpoint) .. ' request_bytes=' .. tostring(evidence.request_bytes))
 	local responseMeta
 	response, err, responseMeta = PostJson(endpoint, body)
+	state.diffsExpanded = false
 	if response then
 		state.lastResponse = response
 		state.lastError = nil
@@ -803,6 +806,12 @@ function widget:ToggleSpectators()
 	state.showSpectators = not state.showSpectators
 	SetConfigInt('PveStatsShowSpectators', state.showSpectators and 1 or 0)
 	DebugLog('toggle_spectators enabled=' .. tostring(state.showSpectators))
+	RefreshViewModel()
+end
+
+function widget:ToggleDiffs()
+	state.diffsExpanded = not state.diffsExpanded
+	DebugLog('toggle_diffs expanded=' .. tostring(state.diffsExpanded))
 	RefreshViewModel()
 end
 

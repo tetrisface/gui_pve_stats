@@ -145,6 +145,12 @@ div {
 	color: #8099B3;
 	font-size: 0.75em;
 	padding-top: 1dp;
+	cursor: pointer;
+	width: 80dp;
+}
+
+.pve-stats-diff-more:hover {
+	color: #CCE6FF;
 }
 
 .table-area {

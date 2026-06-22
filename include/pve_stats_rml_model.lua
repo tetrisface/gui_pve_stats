@@ -406,40 +406,50 @@ local function SameDiffValue(left, right)
 	return DiffValueText(left) == DiffValueText(right)
 end
 
-local function ClosestDiffsRml(response)
+local function ClosestDiffsRml(response, options)
+	options = options or {}
 	local matches = response and response.closest_matches
 	local topMatch = matches and matches[1]
 	local diffs = topMatch and (topMatch.display_diffs or topMatch.diffs) or {}
 	local rows = {}
 	local visibleCount = 0
+	local visibleDiffs = {}
+	local expanded = options.diffExpanded == true
+	local collapsedLimit = options.diffCollapsedLimit or 6
 
 	for _, diff in ipairs(diffs) do
 		local column = diff and diff.column
 		if not HiddenDiffColumn(column) and not SameDiffValue(diff.incoming, diff.expected) then
 			visibleCount = visibleCount + 1
-			if visibleCount <= 6 then
-				rows[#rows + 1] = table.concat({
-					"<div class=\"pve-stats-diff-row\">",
-					"<span class=\"pve-stats-diff-key\">", Model.EscapeRml(column), "</span>",
-					"<span class=\"pve-stats-diff-values\">",
-					Model.EscapeRml(DiffValueText(diff.incoming)),
-					" -> ",
-					Model.EscapeRml(DiffValueText(diff.expected)),
-					"</span>",
-					"</div>",
-				})
-			end
+			visibleDiffs[#visibleDiffs + 1] = diff
 		end
 	end
 
 	if visibleCount == 0 then
 		return "", false
 	end
-	if visibleCount > 6 then
+	local rowLimit = expanded and visibleCount or collapsedLimit
+	for index, diff in ipairs(visibleDiffs) do
+		if index <= rowLimit then
+			rows[#rows + 1] = table.concat({
+				"<div class=\"pve-stats-diff-row\">",
+				"<span class=\"pve-stats-diff-key\">", Model.EscapeRml(diff.column), "</span>",
+				"<span class=\"pve-stats-diff-values\">",
+				Model.EscapeRml(DiffValueText(diff.incoming)),
+				" -> ",
+				Model.EscapeRml(DiffValueText(diff.expected)),
+				"</span>",
+				"</div>",
+			})
+		end
+	end
+
+	if visibleCount > collapsedLimit then
+		local toggleText = expanded and "Show fewer" or table.concat({"+", tostring(visibleCount - collapsedLimit), " more"})
 		rows[#rows + 1] = table.concat({
-			"<div class=\"pve-stats-diff-more\">+",
-			tostring(visibleCount - 6),
-			" more</div>",
+			"<div class=\"pve-stats-diff-more\" onclick=\"widget:ToggleDiffs(event)\">",
+			Model.EscapeRml(toggleText),
+			"</div>",
 		})
 	end
 	return table.concat({
@@ -500,6 +510,47 @@ local function PlayerId(player)
 	return player and (player.player_id or player.playerId or player.account_id or player.accountId)
 end
 
+local function NumberForDescendingSort(value)
+	return tonumber(value) or -math.huge
+end
+
+local function PlayerNameForAscendingSort(player)
+	local name = tostring(player and player.player_name or "")
+	return string.lower(name), name
+end
+
+local function PlayerComesBefore(left, right)
+	local leftHarderWins = NumberForDescendingSort(left and left.harder_wins)
+	local rightHarderWins = NumberForDescendingSort(right and right.harder_wins)
+	if leftHarderWins ~= rightHarderWins then
+		return leftHarderWins > rightHarderWins
+	end
+
+	local leftClosestWins = NumberForDescendingSort(left and left.exact_wins)
+	local rightClosestWins = NumberForDescendingSort(right and right.exact_wins)
+	if leftClosestWins ~= rightClosestWins then
+		return leftClosestWins > rightClosestWins
+	end
+
+	local leftRating = NumberForDescendingSort(left and left.player_rating)
+	local rightRating = NumberForDescendingSort(right and right.player_rating)
+	if leftRating ~= rightRating then
+		return leftRating > rightRating
+	end
+
+	local leftLowerName, leftName = PlayerNameForAscendingSort(left)
+	local rightLowerName, rightName = PlayerNameForAscendingSort(right)
+	if leftLowerName ~= rightLowerName then
+		return leftLowerName < rightLowerName
+	end
+	return leftName < rightName
+end
+
+local function SortPlayers(players)
+	table.sort(players, PlayerComesBefore)
+	return players
+end
+
 local function SplitPlayers(players, request)
 	local activePlayers = {}
 	local spectators = {}
@@ -515,6 +566,9 @@ local function SplitPlayers(players, request)
 			activePlayers[#activePlayers + 1] = player
 		end
 	end
+
+	SortPlayers(activePlayers)
+	SortPlayers(spectators)
 
 	return activePlayers, spectators
 end
@@ -610,7 +664,7 @@ function Model.ViewModelFromResponse(response, errorMessage, request, colorLooku
 	view.exactTotalPlayersText = FormatNumber(setting.unique_players, 0)
 	view.winsLabelText, view.totalPlayersLabelText, view.playerWinsLabelText = WinsLabels(response)
 	view.matchText = MatchResultText(response, setting)
-	view.diffsRml, view.hasDiffs = ClosestDiffsRml(response)
+	view.diffsRml, view.hasDiffs = ClosestDiffsRml(response, options)
 	local activePlayers, spectators = SplitPlayers(response.players, request)
 	if view.showSpectators then
 		view.playersRml = table.concat({
