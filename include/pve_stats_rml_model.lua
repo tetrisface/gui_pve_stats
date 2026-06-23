@@ -369,31 +369,50 @@ local function ClientUpdateNotice(response)
 	return ""
 end
 
+local function SourceWindowFreshnessText(sourceWindow)
+	local ageSeconds = tonumber(sourceWindow.latest_replay_age_seconds)
+	if ageSeconds and ageSeconds >= 0 and ageSeconds < 48 * 60 * 60 then
+		local ageHours = math.max(1, math.floor(ageSeconds / (60 * 60)))
+		if ageHours == 1 then
+			return "1 hour ago"
+		end
+		return tostring(ageHours) .. " hours ago"
+	end
+
+	local ageDays = tonumber(sourceWindow.latest_replay_age_days)
+	if ageDays then
+		if ageDays == 0 then
+			return "today"
+		end
+		if ageDays == 1 then
+			return "1 day ago"
+		end
+		return tostring(math.floor(ageDays)) .. " days ago"
+	end
+
+	return nil
+end
+
 local function SourceWindowText(response)
 	local sourceWindow = response and response.source_window
 	if type(sourceWindow) ~= "table" then
 		return "-"
 	end
+
+	local earliest = tostring(sourceWindow.earliest_replay_time or "")
+	local freshness = SourceWindowFreshnessText(sourceWindow)
+	if earliest ~= "" and freshness then
+		return string.sub(earliest, 1, 10) .. " - " .. freshness
+	end
+
 	if type(sourceWindow.display) == "string" and sourceWindow.display ~= "" then
 		return sourceWindow.display
 	end
 
-	local earliest = tostring(sourceWindow.earliest_replay_time or "")
 	if earliest == "" then
 		return "-"
 	end
 	earliest = string.sub(earliest, 1, 10)
-
-	local ageDays = tonumber(sourceWindow.latest_replay_age_days)
-	if ageDays then
-		local freshness = "today"
-		if ageDays == 1 then
-			freshness = "1 day ago"
-		elseif ageDays > 1 then
-			freshness = tostring(math.floor(ageDays)) .. " days ago"
-		end
-		return earliest .. " - " .. freshness
-	end
 
 	local latest = tostring(sourceWindow.latest_replay_time or "")
 	if latest ~= "" then

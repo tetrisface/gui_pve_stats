@@ -449,6 +449,21 @@ local function testSourceWindowMetadataIsDisplayedWhenPresent()
 	}, nil, request)
 	assertEquals(fallback.sourceWindowText, "2024-03-10 - 1 day ago")
 
+	local hours = Model.ViewModelFromResponse({
+		found = true,
+		match_status = "exact",
+		source_window = {
+			earliest_replay_time = "2024-03-10T22:53:40Z",
+			latest_replay_age_seconds = 47 * 60 * 60,
+			latest_replay_age_days = 2,
+			display = "2024-03-10 - 2 days ago",
+		},
+		setting = {
+			difficulty_rating = 10,
+		},
+	}, nil, request)
+	assertEquals(hours.sourceWindowText, "2024-03-10 - 47 hours ago")
+
 	local missing = Model.ViewModelFromResponse({
 		found = true,
 		match_status = "exact",
