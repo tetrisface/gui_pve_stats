@@ -94,12 +94,11 @@ local function SafeCall(object, methodName, ...)
 end
 
 local function CollectModOptions(springApi)
-	local modOptions = SafeCall(springApi, "GetModOptionsCopy")
-	if modOptions then
-		return CopyTable(modOptions)
+	local modOptions = CopyTable(SafeCall(springApi, "GetModOptionsCopy") or {})
+	for key, value in pairs(SafeCall(springApi, "GetModOptions") or {}) do
+		modOptions[key] = value
 	end
-
-	return CopyTable(SafeCall(springApi, "GetModOptions") or {})
+	return modOptions
 end
 
 local function HasAiName(value, pattern)

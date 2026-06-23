@@ -106,6 +106,39 @@ local function testBuildRequestUsesIterableModOptionsCopyWhenAvailable()
 	assertEquals(request.game_settings.raptor_difficulty, "hard")
 end
 
+local function testBuildRequestUsesLiveModOptionsOverStaleCopy()
+	local spring = {
+		Utilities = {
+			Gametype = {
+				IsRaptors = function() return false end,
+				IsScavengers = function() return true end,
+			},
+		},
+		GetModOptionsCopy = function()
+			return {
+				scav_difficulty = "normal",
+				scav_boss_count = "20",
+				maxunits = "850",
+			}
+		end,
+		GetModOptions = function()
+			return {
+				scav_difficulty = "normal",
+				scav_boss_count = "8",
+				maxunits = "850",
+			}
+		end,
+		GetPlayerList = function() return {} end,
+	}
+
+	local request = assert(Model.BuildRequest(spring, {mapName = "Full Metal Plate"}))
+
+	assertEquals(request.ai_type, "Scavengers")
+	assertEquals(request.game_settings.scav_boss_count, "8")
+	assertTrue(string.find(request._request_key, "scav_boss_count", 1, true) ~= nil)
+	assertTrue(string.find(request._request_key, "1:8", 1, true) ~= nil)
+end
+
 local function testModOptionStepLookupUsesNestedDefinitions()
 	local lookup = Model.ModOptionStepLookup({
 		{
@@ -702,6 +735,7 @@ end
 testBoundedExponentialBackoffSeconds()
 testBuildRequestUsesInGameContext()
 testBuildRequestUsesIterableModOptionsCopyWhenAvailable()
+testBuildRequestUsesLiveModOptionsOverStaleCopy()
 testModOptionStepLookupUsesNestedDefinitions()
 testDetectsRaptorsFromTeamLuaAiWithoutIncidentalScavengerText()
 testAmbiguousPveAiIdentityFailsClosed()
