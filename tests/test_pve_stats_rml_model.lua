@@ -382,6 +382,51 @@ local function testClientVersionNoticeIsInformational()
 	assertEquals(newer.difficultyText, "18.2")
 end
 
+local function testSourceWindowMetadataIsDisplayedWhenPresent()
+	local request = {
+		ai_type = "Raptors",
+	}
+	local view = Model.ViewModelFromResponse({
+		found = true,
+		match_status = "exact",
+		source_window = {
+			earliest_replay_time = "2024-03-10T22:53:40Z",
+			latest_replay_time = "2026-06-20T22:46:17Z",
+			latest_replay_age_days = 4,
+			display = "2024-03-10 - 4 days ago",
+		},
+		setting = {
+			difficulty_rating = 10,
+		},
+	}, nil, request)
+
+	assertEquals(view.sourceWindowText, "2024-03-10 - 4 days ago")
+	assertEquals(view.hasSourceWindow, true)
+
+	local fallback = Model.ViewModelFromResponse({
+		found = true,
+		match_status = "exact",
+		source_window = {
+			earliest_replay_time = "2024-03-10T22:53:40Z",
+			latest_replay_age_days = 1,
+		},
+		setting = {
+			difficulty_rating = 10,
+		},
+	}, nil, request)
+	assertEquals(fallback.sourceWindowText, "2024-03-10 - 1 day ago")
+
+	local missing = Model.ViewModelFromResponse({
+		found = true,
+		match_status = "exact",
+		setting = {
+			difficulty_rating = 10,
+		},
+	}, nil, request)
+	assertEquals(missing.sourceWindowText, "-")
+	assertEquals(missing.hasSourceWindow, false)
+end
+
 local function testClosestDiffsCanExpandHiddenVisibleRows()
 	local request = {
 		ai_type = "Raptors",
@@ -426,6 +471,55 @@ local function testClosestDiffsCanExpandHiddenVisibleRows()
 	assertTrue(string.find(expanded.diffsRml, "assistdronesenabled", 1, true) ~= nil)
 	assertTrue(string.find(expanded.diffsRml, "tweakdefs", 1, true) == nil)
 	assertTrue(string.find(expanded.diffsRml, "startenergy", 1, true) == nil)
+end
+
+local function testVectorDiffSummaryRendersWithoutRawDiffRows()
+	local view = Model.ViewModelFromResponse({
+		found = false,
+		match_status = "closest",
+		closest_matches = {
+			{
+				match_basis = "difficulty_factor_vector",
+				display_diffs = {
+					{column = "tweakdefs", incoming = "opaque-a", expected = "opaque-b"},
+				},
+				vector_diff = {
+					component_count = 123,
+					changed_component_count_min = 5,
+					changed_component_count_max = 7,
+					normalized_l1_distance = 5.4321,
+					normalized_l2_distance = 3.25,
+					normalized_max_delta = 0.125,
+					cosine_distance = 0.292893,
+					angular_distance = 0.25,
+					relative_diff_median = 0.10,
+					relative_diff_average = 0.15,
+					top_changed_families = {
+						{family = "economy_build", changed_component_count = 2, normalized_l1_distance = 1.5},
+						{family = "unit_stat", changed_component_count = 1, normalized_l1_distance = 0.5},
+					},
+				},
+			},
+		},
+		setting = {
+			difficulty_rating = 10,
+		},
+	}, nil, {ai_type = "Raptors"})
+
+	assertEquals(view.hasDiffs, true)
+	assertTrue(string.find(view.diffsRml, "Tweak/vector diff", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "123 components", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "changed 5-7", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "L1 5.432", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "L2 3.25", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "max 0.125", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "cos 0.293", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "angle 0.25", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "median diff 10%", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "avg diff 15%", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "families economy_build 1.5 (2), unit_stat 0.5 (1)", 1, true) ~= nil)
+	assertTrue(string.find(view.diffsRml, "opaque-a", 1, true) == nil)
+	assertTrue(string.find(view.diffsRml, "Closest differs by", 1, true) == nil)
 end
 
 local function testClosestDiffsRoundFloatNoiseToModOptionSteps()
@@ -617,7 +711,9 @@ testDetectsBarbarianFromTeamLuaAi()
 testWireRequestStripsLocalFields()
 testResponseUsesApiMatchStatus()
 testClientVersionNoticeIsInformational()
+testSourceWindowMetadataIsDisplayedWhenPresent()
 testClosestDiffsCanExpandHiddenVisibleRows()
+testVectorDiffSummaryRendersWithoutRawDiffRows()
 testClosestDiffsRoundFloatNoiseToModOptionSteps()
 testClosestDiffsCleanFloatNoiseWithoutStepMetadata()
 testPlayerRowsUseColorLookup()

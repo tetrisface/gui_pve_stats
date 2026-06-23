@@ -119,6 +119,31 @@ div {
 	color: #66FF99;
 }
 
+.pve-stats-source {
+	display: flex;
+	align-items: center;
+	gap: 4dp;
+	padding: 2dp 6dp;
+	background-color: #0D0D0DEB;
+	border-top-width: 1dp;
+	border-top-color: #18232E;
+	flex-shrink: 0;
+}
+
+.pve-stats-source-label {
+	color: #8099B3CC;
+	font-size: 0.7em;
+	width: 26dp;
+	flex-shrink: 0;
+}
+
+.pve-stats-source-value {
+	color: #AABBCC;
+	font-size: 0.75em;
+	overflow: hidden;
+	flex: 1;
+}
+
 .pve-stats-diffs {
 	padding: 4dp 6dp;
 	background-color: #0D0D0DEB;
@@ -131,6 +156,13 @@ div {
 	color: #8099B3;
 	font-size: 0.75em;
 	padding-bottom: 2dp;
+}
+
+.pve-stats-vector-diff {
+	color: #AABBCC;
+	font-size: 0.75em;
+	padding-bottom: 3dp;
+	overflow: hidden;
 }
 
 .pve-stats-diff-row {

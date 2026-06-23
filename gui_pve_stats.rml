@@ -47,6 +47,11 @@
             </div>
         </div>
 
+        <div id="pve-stats-source" class="pve-stats-source hidden">
+            <span class="pve-stats-source-label">Data</span>
+            <span id="pve-stats-source-window" class="pve-stats-source-value">-</span>
+        </div>
+
         <div id="pve-stats-diffs" class="pve-stats-diffs hidden"></div>
 
         <div class="table-area pve-stats-table">

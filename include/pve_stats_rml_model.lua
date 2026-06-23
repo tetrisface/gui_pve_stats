@@ -370,6 +370,39 @@ local function ClientUpdateNotice(response)
 	return ""
 end
 
+local function SourceWindowText(response)
+	local sourceWindow = response and response.source_window
+	if type(sourceWindow) ~= "table" then
+		return "-"
+	end
+	if type(sourceWindow.display) == "string" and sourceWindow.display ~= "" then
+		return sourceWindow.display
+	end
+
+	local earliest = tostring(sourceWindow.earliest_replay_time or "")
+	if earliest == "" then
+		return "-"
+	end
+	earliest = string.sub(earliest, 1, 10)
+
+	local ageDays = tonumber(sourceWindow.latest_replay_age_days)
+	if ageDays then
+		local freshness = "today"
+		if ageDays == 1 then
+			freshness = "1 day ago"
+		elseif ageDays > 1 then
+			freshness = tostring(math.floor(ageDays)) .. " days ago"
+		end
+		return earliest .. " - " .. freshness
+	end
+
+	local latest = tostring(sourceWindow.latest_replay_time or "")
+	if latest ~= "" then
+		return earliest .. " - " .. string.sub(latest, 1, 10)
+	end
+	return "-"
+end
+
 function Model.BoundedExponentialBackoffSeconds(attempt, initialSeconds, maxSeconds)
 	local safeAttempt = math.max(1, tonumber(attempt) or 1)
 	local safeInitial = math.max(0, tonumber(initialSeconds) or 0)
@@ -576,6 +609,115 @@ local function SameDiffValue(diff, options, response, topMatch)
 	return DiffDisplayValue(diff.incoming, diff, options, response, topMatch) == DiffDisplayValue(diff.expected, diff, options, response, topMatch)
 end
 
+local function VectorMetric(label, value)
+	local number = tonumber(value)
+	if not number then
+		return nil
+	end
+	return label .. " " .. FormatRoundedNumber(number, 3)
+end
+
+local function VectorPercentMetric(label, value)
+	local number = tonumber(value)
+	if not number then
+		return nil
+	end
+	return label .. " " .. FormatRoundedNumber(number * 100, 1) .. "%"
+end
+
+local function VectorFamilySummary(families)
+	if type(families) ~= "table" then
+		return nil
+	end
+
+	local parts = {}
+	for _, family in ipairs(families) do
+		if #parts >= 3 then
+			break
+		end
+		if type(family) == "table" and family.family then
+			local label = tostring(family.family)
+			local distance = tonumber(family.normalized_l1_distance)
+			if distance then
+				label = label .. " " .. FormatRoundedNumber(distance, 3)
+			end
+			local changed = tonumber(family.changed_component_count)
+			if changed and changed > 0 then
+				label = label .. " (" .. tostring(math.floor(changed)) .. ")"
+			end
+			parts[#parts + 1] = label
+		end
+	end
+
+	if #parts == 0 then
+		return nil
+	end
+	return "families " .. table.concat(parts, ", ")
+end
+
+local function VectorDiffSummaryRml(topMatch)
+	local vector = topMatch and topMatch.vector_diff
+	if type(vector) ~= "table" then
+		return ""
+	end
+
+	local parts = {}
+	local componentCount = tonumber(vector.component_count)
+	if componentCount and componentCount > 0 then
+		parts[#parts + 1] = tostring(math.floor(componentCount)) .. " components"
+	end
+	local changedMin = tonumber(vector.changed_component_count_min)
+	local changedMax = tonumber(vector.changed_component_count_max)
+	if changedMin and changedMax and changedMax > 0 then
+		if changedMin == changedMax then
+			parts[#parts + 1] = "changed " .. tostring(math.floor(changedMax))
+		else
+			parts[#parts + 1] = "changed " .. tostring(math.floor(changedMin)) .. "-" .. tostring(math.floor(changedMax))
+		end
+	end
+	local l1 = VectorMetric("L1", vector.normalized_l1_distance)
+	if l1 then
+		parts[#parts + 1] = l1
+	end
+	local l2 = VectorMetric("L2", vector.normalized_l2_distance)
+	if l2 then
+		parts[#parts + 1] = l2
+	end
+	local maxDelta = VectorMetric("max", vector.normalized_max_delta)
+	if maxDelta then
+		parts[#parts + 1] = maxDelta
+	end
+	local cosine = VectorMetric("cos", vector.cosine_distance)
+	if cosine then
+		parts[#parts + 1] = cosine
+	end
+	local angular = VectorMetric("angle", vector.angular_distance)
+	if angular then
+		parts[#parts + 1] = angular
+	end
+	local relativeMedian = VectorPercentMetric("median diff", vector.relative_diff_median)
+	if relativeMedian then
+		parts[#parts + 1] = relativeMedian
+	end
+	local relativeAverage = VectorPercentMetric("avg diff", vector.relative_diff_average)
+	if relativeAverage then
+		parts[#parts + 1] = relativeAverage
+	end
+	local families = VectorFamilySummary(vector.top_changed_families)
+	if families then
+		parts[#parts + 1] = families
+	end
+	if #parts == 0 then
+		return ""
+	end
+
+	return table.concat({
+		"<div class=\"pve-stats-vector-diff\">Tweak/vector diff: ",
+		Model.EscapeRml(table.concat(parts, ", ")),
+		"</div>",
+	})
+end
+
 local function ClosestDiffsRml(response, options)
 	options = options or {}
 	local matches = response and response.closest_matches
@@ -595,45 +737,55 @@ local function ClosestDiffsRml(response, options)
 		end
 	end
 
-	if visibleCount == 0 then
+	local vectorSummary = VectorDiffSummaryRml(topMatch)
+	if visibleCount == 0 and vectorSummary == "" then
 		return "", false
 	end
-	rows[#rows + 1] = table.concat({
-		"<div class=\"pve-stats-diff-row pve-stats-diff-header\">",
-		"<span class=\"pve-stats-diff-field\">Field</span>",
-		"<span class=\"pve-stats-diff-current\">Current</span>",
-		"<span class=\"pve-stats-diff-closest\">Closest</span>",
-		"</div>",
-	})
-	local rowLimit = expanded and visibleCount or collapsedLimit
-	for index, diff in ipairs(visibleDiffs) do
-		if index <= rowLimit then
+	if visibleCount > 0 then
+		rows[#rows + 1] = table.concat({
+			"<div class=\"pve-stats-diff-row pve-stats-diff-header\">",
+			"<span class=\"pve-stats-diff-field\">Field</span>",
+			"<span class=\"pve-stats-diff-current\">Current</span>",
+			"<span class=\"pve-stats-diff-closest\">Closest</span>",
+			"</div>",
+		})
+		local rowLimit = expanded and visibleCount or collapsedLimit
+		for index, diff in ipairs(visibleDiffs) do
+			if index <= rowLimit then
+				rows[#rows + 1] = table.concat({
+					"<div class=\"pve-stats-diff-row\">",
+					"<span class=\"pve-stats-diff-field\">", Model.EscapeRml(diff.column), "</span>",
+					"<span class=\"pve-stats-diff-current\">", Model.EscapeRml(DiffDisplayValue(diff.incoming, diff, options, response, topMatch)), "</span>",
+					"<span class=\"pve-stats-diff-closest\">", Model.EscapeRml(DiffDisplayValue(diff.expected, diff, options, response, topMatch)), "</span>",
+					"</div>",
+				})
+			end
+		end
+
+		if visibleCount > collapsedLimit then
+			local toggleText = expanded and "Show fewer" or table.concat({"+", tostring(visibleCount - collapsedLimit), " more"})
 			rows[#rows + 1] = table.concat({
-				"<div class=\"pve-stats-diff-row\">",
-				"<span class=\"pve-stats-diff-field\">", Model.EscapeRml(diff.column), "</span>",
-				"<span class=\"pve-stats-diff-current\">", Model.EscapeRml(DiffDisplayValue(diff.incoming, diff, options, response, topMatch)), "</span>",
-				"<span class=\"pve-stats-diff-closest\">", Model.EscapeRml(DiffDisplayValue(diff.expected, diff, options, response, topMatch)), "</span>",
+				"<div class=\"pve-stats-diff-more\" onclick=\"widget:ToggleDiffs(event)\">",
+				Model.EscapeRml(toggleText),
 				"</div>",
 			})
 		end
 	end
-
-	if visibleCount > collapsedLimit then
-		local toggleText = expanded and "Show fewer" or table.concat({"+", tostring(visibleCount - collapsedLimit), " more"})
-		rows[#rows + 1] = table.concat({
-			"<div class=\"pve-stats-diff-more\" onclick=\"widget:ToggleDiffs(event)\">",
-			Model.EscapeRml(toggleText),
+	local sections = {}
+	if vectorSummary ~= "" then
+		sections[#sections + 1] = vectorSummary
+	end
+	if visibleCount > 0 then
+		sections[#sections + 1] = table.concat({
+			"<div class=\"pve-stats-diff-title\">Closest differs by ",
+			tostring(visibleCount),
+			" shown field",
+			visibleCount == 1 and "" or "s",
 			"</div>",
+			table.concat(rows, "\n"),
 		})
 	end
-	return table.concat({
-		"<div class=\"pve-stats-diff-title\">Closest differs by ",
-		tostring(visibleCount),
-		" shown field",
-		visibleCount == 1 and "" or "s",
-		"</div>",
-		table.concat(rows, "\n"),
-	}), true
+	return table.concat(sections, "\n"), true
 end
 
 local PLAYER_COLOR_FALLBACKS = {
@@ -809,6 +961,7 @@ function Model.EmptyViewModel()
 		totalPlayersLabelText = "Exact Total Players",
 		playerWinsLabelText = "Exact Wins",
 		matchText = "-",
+		sourceWindowText = "-",
 		isExactMatch = false,
 		errorText = "",
 		noticeText = "",
@@ -819,6 +972,7 @@ function Model.EmptyViewModel()
 		hasNotice = false,
 		hasPlayers = false,
 		hasDiffs = false,
+		hasSourceWindow = false,
 		showSpectators = false,
 		clientVersion = Model.CLIENT_VERSION,
 		apiClientVersion = nil,
@@ -858,6 +1012,8 @@ function Model.ViewModelFromResponse(response, errorMessage, request, colorLooku
 	view.exactTotalPlayersText = FormatNumber(setting.unique_players, 0)
 	view.winsLabelText, view.totalPlayersLabelText, view.playerWinsLabelText = WinsLabels(response)
 	view.matchText = MatchResultText(response, setting)
+	view.sourceWindowText = SourceWindowText(response)
+	view.hasSourceWindow = view.sourceWindowText ~= "-"
 	view.isExactMatch = IsExactMatch(response, setting)
 	view.diffsRml, view.hasDiffs = ClosestDiffsRml(response, options)
 	local activePlayers, spectators = SplitPlayers(response.players, request)

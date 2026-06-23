@@ -20,7 +20,7 @@ local DEV = 0
 local LOG_SECTION = 'pve_stats_rml'
 local LOG_PREFIX = 'pve_stats'
 local MODEL_NAME = 'pve_stats_model'
-local RML_PATH = 'luaui/rmlwidgets/gui_pve_stats/gui_pve_stats.rml'
+local RML_PATH = 'LuaUI/RmlWidgets/gui_pve_stats/gui_pve_stats.rml'
 local PANEL_ID = 'pve-stats-root'
 local DEFAULT_HOST = DEV == 1 and '127.0.0.1' or 'd29i3oohxql6zz.cloudfront.net'
 local DEFAULT_PORT = DEV == 1 and 8080 or 80
@@ -42,7 +42,7 @@ local DEFAULT_PANEL_TOP = 138
 local DEFAULT_PANEL_RIGHT = 18
 local HASH_MODULO = 4294967296
 
-local Model = VFS.Include('luaui/rmlwidgets/gui_pve_stats/include/pve_stats_rml_model.lua')
+local Model = VFS.Include('LuaUI/RmlWidgets/gui_pve_stats/include/pve_stats_rml_model.lua')
 local Json = Json or VFS.Include('common/luaUtilities/json.lua')
 local CLIENT_VERSION = Model.CLIENT_VERSION or 1
 
@@ -134,6 +134,7 @@ local function ApplyViewModel(viewModel)
 		dm.totalPlayersLabelText = state.viewModel.totalPlayersLabelText
 		dm.playerWinsLabelText = state.viewModel.playerWinsLabelText
 		dm.matchText = state.viewModel.matchText
+		dm.sourceWindowText = state.viewModel.sourceWindowText
 		dm.errorText = state.viewModel.errorText
 		dm.noticeText = state.viewModel.noticeText
 	end
@@ -149,6 +150,7 @@ local function ApplyViewModel(viewModel)
 	SetText('pve-stats-exact-total-players-label', state.viewModel.totalPlayersLabelText)
 	SetText('pve-stats-player-exact-wins-label', state.viewModel.playerWinsLabelText)
 	SetText('pve-stats-match', state.viewModel.matchText)
+	SetText('pve-stats-source-window', state.viewModel.sourceWindowText)
 	SetText('pve-stats-spectators-toggle', state.viewModel.spectatorText)
 	SetText('pve-stats-error', messageText)
 	SetRml('pve-stats-players', state.viewModel.playersRml)
@@ -159,6 +161,7 @@ local function ApplyViewModel(viewModel)
 	SetClass('pve-stats-match', 'exact-match', state.viewModel.isExactMatch)
 	SetClass('pve-stats-error', 'notice', state.viewModel.hasNotice and not state.viewModel.hasError)
 	SetClass('pve-stats-error', 'hidden', not state.viewModel.hasError and not state.viewModel.hasNotice)
+	SetClass('pve-stats-source', 'hidden', not state.viewModel.hasSourceWindow)
 	SetClass('pve-stats-diffs', 'hidden', not state.viewModel.hasDiffs)
 	SetClass('pve-stats-spectators-toggle', 'active', state.viewModel.showSpectators)
 end
@@ -363,6 +366,32 @@ local function PositionDocument()
 	}))
 end
 
+local function VectorFamiliesText(families)
+	if type(families) ~= 'table' then
+		return nil
+	end
+	local parts = {}
+	for _, family in ipairs(families) do
+		if #parts >= 3 then
+			break
+		end
+		if type(family) == 'table' and family.family then
+			local text = tostring(family.family)
+			if family.normalized_l1_distance ~= nil then
+				text = text .. ':' .. tostring(family.normalized_l1_distance)
+			end
+			if family.changed_component_count ~= nil then
+				text = text .. ':' .. tostring(family.changed_component_count)
+			end
+			parts[#parts + 1] = text
+		end
+	end
+	if #parts == 0 then
+		return nil
+	end
+	return table.concat(parts, ',')
+end
+
 local function FormatEvidence(evidence)
 	if not evidence then
 		return 'pve_stats_evidence status=missing'
@@ -392,6 +421,14 @@ local function FormatEvidence(evidence)
 		tostring(evidence.client_version or '-'),
 		' api_client_version=',
 		tostring(evidence.api_client_version or '-'),
+		' source_window=',
+		tostring(evidence.source_window or '-'),
+		' source_earliest=',
+		tostring(evidence.earliest_replay_time or '-'),
+		' latest_replay=',
+		tostring(evidence.latest_replay_time or '-'),
+		' latest_replay_age_days=',
+		tostring(evidence.latest_replay_age_days or '-'),
 		' request_bytes=',
 		tostring(evidence.request_bytes or 0),
 		' response_hash=',
@@ -402,6 +439,26 @@ local function FormatEvidence(evidence)
 		tostring(evidence.http_status or '-'),
 		' match_status=',
 		tostring(evidence.match_status or '-'),
+		' match_basis=',
+		tostring(evidence.closest_match_basis or '-'),
+		' diff_display=',
+		tostring(evidence.closest_match_display_diff_count or '-'),
+		' diff_hidden=',
+		tostring(evidence.closest_match_hidden_diff_total or '-'),
+		' vector_components=',
+		tostring(evidence.closest_match_vector_component_count or '-'),
+		' vector_l1=',
+		tostring(evidence.closest_match_vector_l1 or '-'),
+		' vector_cosine=',
+		tostring(evidence.closest_match_vector_cosine or '-'),
+		' vector_angle=',
+		tostring(evidence.closest_match_vector_angle or '-'),
+		' vector_rel_median=',
+		tostring(evidence.closest_match_vector_relative_median or '-'),
+		' vector_rel_average=',
+		tostring(evidence.closest_match_vector_relative_average or '-'),
+		' vector_families=',
+		tostring(evidence.closest_match_vector_families or '-'),
 	})
 end
 
@@ -580,6 +637,42 @@ local function CompleteEvidence(evidence, response, err, meta)
 		evidence.match_status = response.match_status
 		evidence.setting_hash = response.setting_hash
 		evidence.api_client_version = response.client_version
+		local topMatch = response.closest_matches and response.closest_matches[1]
+		if type(topMatch) == 'table' then
+			evidence.closest_match_basis = topMatch.match_basis
+			if type(topMatch.display_diffs) == 'table' then
+				evidence.closest_match_display_diff_count = #topMatch.display_diffs
+			elseif topMatch.difference_count == 0 then
+				evidence.closest_match_display_diff_count = 0
+			end
+			if type(topMatch.hidden_diff_summary) == 'table' then
+				evidence.closest_match_hidden_diff_total = topMatch.hidden_diff_summary.total
+				evidence.closest_match_hidden_diff_tweak = topMatch.hidden_diff_summary.tweak
+				evidence.closest_match_hidden_diff_disabled_parent_child = topMatch.hidden_diff_summary.disabled_parent_child
+				evidence.closest_match_hidden_diff_internal = topMatch.hidden_diff_summary.internal
+			elseif topMatch.difference_count == 0 then
+				evidence.closest_match_hidden_diff_total = 0
+			end
+			if type(topMatch.vector_diff) == 'table' then
+				evidence.closest_match_vector_component_count = topMatch.vector_diff.component_count
+				evidence.closest_match_vector_changed_min = topMatch.vector_diff.changed_component_count_min
+				evidence.closest_match_vector_changed_max = topMatch.vector_diff.changed_component_count_max
+				evidence.closest_match_vector_l1 = topMatch.vector_diff.normalized_l1_distance
+				evidence.closest_match_vector_l2 = topMatch.vector_diff.normalized_l2_distance
+				evidence.closest_match_vector_max_delta = topMatch.vector_diff.normalized_max_delta
+				evidence.closest_match_vector_cosine = topMatch.vector_diff.cosine_distance
+				evidence.closest_match_vector_angle = topMatch.vector_diff.angular_distance
+				evidence.closest_match_vector_relative_median = topMatch.vector_diff.relative_diff_median
+				evidence.closest_match_vector_relative_average = topMatch.vector_diff.relative_diff_average
+				evidence.closest_match_vector_families = VectorFamiliesText(topMatch.vector_diff.top_changed_families)
+			end
+		end
+		if type(response.source_window) == 'table' then
+			evidence.source_window = response.source_window.display
+			evidence.earliest_replay_time = response.source_window.earliest_replay_time
+			evidence.latest_replay_time = response.source_window.latest_replay_time
+			evidence.latest_replay_age_days = response.source_window.latest_replay_age_days
+		end
 	end
 	state.lastEvidence = evidence
 	MaybeLogEvidence(evidence)
